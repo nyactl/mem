@@ -101,6 +101,41 @@ Attach a file to an existing note.
 
 ---
 
+## Attachment backend
+
+Attachment storage is pluggable. The backend receives a file and returns a
+reference stored in the note's frontmatter `attachments` list.
+
+`~/.config/ref/config.json`:
+```json
+{
+  "attachment_backend": "local"
+}
+```
+
+**`local` (default)** — copies file to `~/.ref/attachments/<timestamp>-<filename>`,
+stores absolute path in frontmatter.
+
+**`paperless-ngx-cli` (future)** — uploads file via paperless-ngx-cli, stores
+document ID or URL in frontmatter. Enables paperless-ngx as the document store
+for all ref attachments.
+
+The frontmatter reference format depends on the backend:
+```yaml
+# local
+attachments:
+  - /Users/you/.ref/attachments/20260511T143022-diagram.png
+
+# paperless-ngx (future)
+attachments:
+  - paperless://1234
+```
+
+ref-cli never reads the attachment content — it only stores and displays the
+reference. Opening an attachment is delegated to the appropriate tool.
+
+---
+
 ## Tag backend
 
 Tags are presented as ref-cli's own. The source is configurable.
