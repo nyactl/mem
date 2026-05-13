@@ -47,7 +47,7 @@ func Create(dir string, ts time.Time, slug string, tags []string, attachments []
 	}
 	path := filepath.Join(dir, Filename(ts, slug))
 	if _, err := os.Stat(path); err == nil {
-		return "", fmt.Errorf("note %q already exists — use: ref edit %s", slug, slug)
+		return "", fmt.Errorf("note %q already exists — use: mem edit %s", slug, slug)
 	}
 	content := buildFrontmatter(tags, attachments) + "\n"
 	return path, os.WriteFile(path, []byte(content), 0600)
@@ -102,6 +102,7 @@ func List(dir string) ([]Note, error) {
 
 // FindBySlug finds a note by slug, ignoring the timestamp prefix.
 func FindBySlug(dir, slug string) (Note, error) {
+	slug = strings.TrimSuffix(slug, ".md")
 	notes, err := List(dir)
 	if err != nil {
 		return Note{}, err
