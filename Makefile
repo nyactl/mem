@@ -1,12 +1,12 @@
-BIN := ref-cli
+BIN := mem-cli
 
 .PHONY: build install test
 
 build:
-	go build -o $(BIN) ./cmd/ref-cli
+	go build -o $(BIN) ./cmd/mem-cli
 
 install:
-	go install ./cmd/ref-cli
+	go install ./cmd/mem-cli
 
 test:
 	go test ./...

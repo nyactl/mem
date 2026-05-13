@@ -13,7 +13,7 @@ type Config struct {
 	AttachmentsDir    string `json:"attachments_dir"`
 }
 
-// Load reads config from XDG_CONFIG_HOME/ref/config.json, filling in defaults.
+// Load reads config from XDG_CONFIG_HOME/mem/config.json, filling in defaults.
 func Load() Config {
 	cfg := defaults()
 	data, err := os.ReadFile(configPath())
@@ -38,8 +38,8 @@ func defaults() Config {
 	return Config{
 		TagBackend:        "todoist-cli labels",
 		AttachmentBackend: "local",
-		NotesDir:          filepath.Join(home, ".ref", "notes"),
-		AttachmentsDir:    filepath.Join(home, ".ref", "attachments"),
+		NotesDir:          filepath.Join(home, ".mem", "notes"),
+		AttachmentsDir:    filepath.Join(home, ".mem", "attachments"),
 	}
 }
 
@@ -49,5 +49,5 @@ func configPath() string {
 		home, _ := os.UserHomeDir()
 		base = filepath.Join(home, ".config")
 	}
-	return filepath.Join(base, "ref", "config.json")
+	return filepath.Join(base, "mem", "config.json")
 }
