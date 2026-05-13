@@ -1,4 +1,4 @@
-module ref-cli
+module mem-cli
 
 go 1.23
 

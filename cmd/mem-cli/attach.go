@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"ref-cli/internal/attachment"
-	"ref-cli/internal/config"
-	"ref-cli/internal/note"
+	"mem-cli/internal/attachment"
+	"mem-cli/internal/config"
+	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
 )
