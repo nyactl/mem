@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"ref-cli/internal/config"
-	"ref-cli/internal/note"
+	"mem-cli/internal/config"
+	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
 )

@@ -7,16 +7,16 @@ import (
 	"os/exec"
 	"strings"
 
-	"ref-cli/internal/backend"
-	"ref-cli/internal/config"
-	"ref-cli/internal/note"
+	"mem-cli/internal/backend"
+	"mem-cli/internal/config"
+	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
 )
 
 var root = &cobra.Command{
-	Use:          "ref-cli",
-	Short:        "Personal reference notes",
+	Use:          "mem-cli",
+	Short:        "Shared external memory for human and AI",
 	SilenceUsage: true,
 }
 
