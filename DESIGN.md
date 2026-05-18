@@ -1,7 +1,7 @@
 # mem-cli
 
-A personal reference tool. Atomic, tagged notes for facts, findings, commands,
-and ideas — captured quickly, looked up fast.
+Shared external memory for human and AI. Atomic, tagged notes for facts,
+findings, commands, and ideas — captured quickly, looked up fast.
 
 Fully independent. No dependency on ryo or any other tool.
 
@@ -118,7 +118,7 @@ stores absolute path in frontmatter.
 
 **`paperless-ngx-cli` (future)** — uploads file via paperless-ngx-cli, stores
 document ID or URL in frontmatter. Enables paperless-ngx as the document store
-for all ref attachments.
+for all mem attachments.
 
 The frontmatter reference format depends on the backend:
 ```yaml
