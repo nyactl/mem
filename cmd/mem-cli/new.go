@@ -19,18 +19,12 @@ var newSource string
 var newFiles []string
 
 var newCmd = &cobra.Command{
-	Use:   "new <title>",
+	Use:   "new [<title>]",
 	Short: "Create a new mem note",
-	Long:  `Title words can be quoted or unquoted: mem new kafka rebalance blocks partitions`,
-	Args:  cobra.MinimumNArgs(1),
+	Long: `Title is optional. When omitted the editor opens immediately; the first
+# Heading becomes the slug. Inline #tags and @source are extracted from the body.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
-
-		title := strings.Join(args, " ")
-		slug := note.Slugify(title)
-		if slug == "" {
-			return fmt.Errorf("title %q produces an empty slug", title)
-		}
 		ts := time.Now()
 
 		var attachmentPaths []string
@@ -43,13 +37,36 @@ var newCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "attached → %s\n", dst)
 		}
 
-		path, err := note.Create(cfg.NotesDir, ts, slug, newLabels, newSource, attachmentPaths)
+		var path string
+		var err error
+
+		if len(args) == 0 {
+			path, err = note.CreateDraft(cfg.NotesDir, ts)
+		} else {
+			title := strings.Join(args, " ")
+			slug := note.Slugify(title)
+			if slug == "" {
+				return fmt.Errorf("title %q produces an empty slug", title)
+			}
+			path, err = note.Create(cfg.NotesDir, ts, slug, newLabels, newSource, attachmentPaths)
+		}
 		if err != nil {
 			return err
 		}
+
 		if err := openEditor(path); err != nil {
 			return err
 		}
+
+		finalPath, err := note.FinalizeNote(path, newLabels, newSource)
+		if err != nil {
+			return err
+		}
+		if finalPath == "" {
+			// Empty draft discarded.
+			return nil
+		}
+
 		_, _ = index.Rebuild(cfg.NotesDir)
 		return nil
 	},

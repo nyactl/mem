@@ -54,6 +54,112 @@ func Create(dir string, ts time.Time, slug string, tags []string, source string,
 	return path, os.WriteFile(path, []byte(content), 0600)
 }
 
+// CreateDraft writes a placeholder note (no title yet) and returns its path.
+// Call FinalizeNote after the editor closes to derive slug and inline metadata.
+func CreateDraft(dir string, ts time.Time) (string, error) {
+	return Create(dir, ts, "draft", nil, "", nil)
+}
+
+// FinalizeNote reads a note after editing, extracts inline #tags and @source
+// from the body, merges them with frontmatter, and renames the file if the
+// first # Heading provides a better slug than the current one.
+// Returns the (possibly new) path.
+func FinalizeNote(path string, extraTags []string, extraSource string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return path, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		// Empty file — discard draft.
+		_ = os.Remove(path)
+		return "", nil
+	}
+
+	tags, source, attachments, body := parseFrontmatter(string(data))
+
+	// Merge CLI-supplied tags and source.
+	tags = mergeTags(tags, extraTags)
+	tags = mergeTags(tags, extractInlineTags(body))
+	if source == "" {
+		source = extraSource
+	}
+	if source == "" {
+		source = extractInlineSource(body)
+	}
+
+	// Derive slug from first # Heading in body.
+	newSlug := extractHeading(body)
+	_, currentSlug, _ := parseFilename(filepath.Base(path))
+
+	targetSlug := currentSlug
+	if newSlug != "" {
+		targetSlug = newSlug
+	}
+
+	// Rewrite frontmatter.
+	newContent := buildFrontmatter(tags, source, attachments) + body
+	if err := os.WriteFile(path, []byte(newContent), 0600); err != nil {
+		return path, err
+	}
+
+	// Rename if slug changed.
+	if targetSlug != currentSlug && targetSlug != "" {
+		ts, _, _ := parseFilename(filepath.Base(path))
+		newPath := filepath.Join(filepath.Dir(path), Filename(ts, targetSlug))
+		if err := os.Rename(path, newPath); err != nil {
+			return path, err
+		}
+		return newPath, nil
+	}
+	return path, nil
+}
+
+var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)
+var reInlineSource = regexp.MustCompile(`(?:^|\s)@([A-Za-z][A-Za-z0-9_-]*)`)
+var reHeading = regexp.MustCompile(`(?m)^#\s+(.+)$`)
+
+func extractInlineTags(body string) []string {
+	matches := reInlineTag.FindAllStringSubmatch(body, -1)
+	seen := make(map[string]struct{})
+	var out []string
+	for _, m := range matches {
+		t := strings.TrimSpace(m[1])
+		if _, ok := seen[t]; !ok {
+			seen[t] = struct{}{}
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func extractInlineSource(body string) string {
+	m := reInlineSource.FindStringSubmatch(body)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+func extractHeading(body string) string {
+	m := reHeading.FindStringSubmatch(body)
+	if m == nil {
+		return ""
+	}
+	return Slugify(m[1])
+}
+
+func mergeTags(existing, extra []string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(existing)+len(extra))
+	for _, t := range append(existing, extra...) {
+		if _, ok := seen[t]; !ok {
+			seen[t] = struct{}{}
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // Parse reads and parses a note file.
 func Parse(path string) (Note, error) {
 	ts, slug, err := parseFilename(filepath.Base(path))
