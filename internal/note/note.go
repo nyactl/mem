@@ -18,7 +18,7 @@ type Note struct {
 	Slug        string
 	Created     time.Time
 	Tags        []string
-	Source      string
+	Sources     []string
 	Attachments []string
 	Body        string
 }
@@ -42,7 +42,7 @@ func Filename(ts time.Time, slug string) string {
 }
 
 // Create writes a new note file with frontmatter and returns its path.
-func Create(dir string, ts time.Time, slug string, tags []string, source string, attachments []string) (string, error) {
+func Create(dir string, ts time.Time, slug string, tags []string, sources []string, attachments []string) (string, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create notes dir: %w", err)
 	}
@@ -50,44 +50,37 @@ func Create(dir string, ts time.Time, slug string, tags []string, source string,
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("note %q already exists — use: mem edit %s", slug, slug)
 	}
-	content := buildFrontmatter(tags, source, attachments) + "\n"
+	content := buildFrontmatter(tags, sources, attachments) + "\n"
 	return path, os.WriteFile(path, []byte(content), 0600)
 }
 
 // CreateDraft writes a placeholder note (no title yet) and returns its path.
 // Call FinalizeNote after the editor closes to derive slug and inline metadata.
 func CreateDraft(dir string, ts time.Time) (string, error) {
-	return Create(dir, ts, "draft", nil, "", nil)
+	return Create(dir, ts, "draft", nil, nil, nil)
 }
 
-// FinalizeNote reads a note after editing, extracts inline #tags and @source
+// FinalizeNote reads a note after editing, extracts inline #tags and @sources
 // from the body, merges them with frontmatter, and renames the file if the
 // first # Heading provides a better slug than the current one.
 // Returns the (possibly new) path.
-func FinalizeNote(path string, extraTags []string, extraSource string) (string, error) {
+func FinalizeNote(path string, extraTags []string, extraSources []string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return path, err
 	}
 	if len(strings.TrimSpace(string(data))) == 0 {
-		// Empty file — discard draft.
 		_ = os.Remove(path)
 		return "", nil
 	}
 
-	tags, source, attachments, body := parseFrontmatter(string(data))
+	tags, sources, attachments, body := parseFrontmatter(string(data))
 
-	// Merge CLI-supplied tags and source.
 	tags = mergeTags(tags, extraTags)
 	tags = mergeTags(tags, extractInlineTags(body))
-	if source == "" {
-		source = extraSource
-	}
-	if source == "" {
-		source = extractInlineSource(body)
-	}
+	sources = mergeSources(sources, extraSources)
+	sources = mergeSources(sources, extractInlineSources(body))
 
-	// Derive slug from first # Heading in body.
 	newSlug := extractHeading(body)
 	_, currentSlug, _ := parseFilename(filepath.Base(path))
 
@@ -96,13 +89,11 @@ func FinalizeNote(path string, extraTags []string, extraSource string) (string, 
 		targetSlug = newSlug
 	}
 
-	// Rewrite frontmatter.
-	newContent := buildFrontmatter(tags, source, attachments) + body
+	newContent := buildFrontmatter(tags, sources, attachments) + body
 	if err := os.WriteFile(path, []byte(newContent), 0600); err != nil {
 		return path, err
 	}
 
-	// Rename if slug changed.
 	if targetSlug != currentSlug && targetSlug != "" {
 		ts, _, _ := parseFilename(filepath.Base(path))
 		newPath := filepath.Join(filepath.Dir(path), Filename(ts, targetSlug))
@@ -115,7 +106,10 @@ func FinalizeNote(path string, extraTags []string, extraSource string) (string, 
 }
 
 var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)
-var reInlineSource = regexp.MustCompile(`(?:^|\s)@([A-Za-z][A-Za-z0-9_-]*)`)
+
+// reInlineSource matches @word or @"Multi Word Name".
+var reInlineSource = regexp.MustCompile(`@"([^"]+)"|@([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9_-]*)`)
+
 var reHeading = regexp.MustCompile(`(?m)^#\s+(.+)$`)
 
 func extractInlineTags(body string) []string {
@@ -132,12 +126,26 @@ func extractInlineTags(body string) []string {
 	return out
 }
 
-func extractInlineSource(body string) string {
-	m := reInlineSource.FindStringSubmatch(body)
-	if m == nil {
-		return ""
+func extractInlineSources(body string) []string {
+	matches := reInlineSource.FindAllStringSubmatch(body, -1)
+	seen := make(map[string]struct{})
+	var out []string
+	for _, m := range matches {
+		// m[1] = quoted group, m[2] = bare word group
+		s := m[1]
+		if s == "" {
+			s = m[2]
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
 	}
-	return m[1]
+	return out
 }
 
 func extractHeading(body string) string {
@@ -160,6 +168,18 @@ func mergeTags(existing, extra []string) []string {
 	return out
 }
 
+func mergeSources(existing, extra []string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(existing)+len(extra))
+	for _, s := range append(existing, extra...) {
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // Parse reads and parses a note file.
 func Parse(path string) (Note, error) {
 	ts, slug, err := parseFilename(filepath.Base(path))
@@ -170,13 +190,13 @@ func Parse(path string) (Note, error) {
 	if err != nil {
 		return Note{}, err
 	}
-	tags, source, attachments, body := parseFrontmatter(string(data))
+	tags, sources, attachments, body := parseFrontmatter(string(data))
 	return Note{
 		Path:        path,
 		Slug:        slug,
 		Created:     ts,
 		Tags:        tags,
-		Source:      source,
+		Sources:     sources,
 		Attachments: attachments,
 		Body:        body,
 	}, nil
@@ -229,9 +249,9 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	if err != nil {
 		return err
 	}
-	tags, source, existing, body := parseFrontmatter(string(data))
+	tags, sources, existing, body := parseFrontmatter(string(data))
 	merged := append(existing, newAttachments...)
-	content := buildFrontmatter(tags, source, merged) + body + "\n"
+	content := buildFrontmatter(tags, sources, merged) + body + "\n"
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
@@ -244,10 +264,10 @@ func SourcesFromNotes(dir string) ([]string, error) {
 	seen := make(map[string]struct{})
 	var out []string
 	for _, n := range notes {
-		if n.Source != "" {
-			if _, ok := seen[n.Source]; !ok {
-				seen[n.Source] = struct{}{}
-				out = append(out, n.Source)
+		for _, s := range n.Sources {
+			if _, ok := seen[s]; !ok {
+				seen[s] = struct{}{}
+				out = append(out, s)
 			}
 		}
 	}
@@ -281,7 +301,7 @@ func parseFilename(base string) (time.Time, string, error) {
 	return ts, base[16:], nil
 }
 
-func buildFrontmatter(tags []string, source string, attachments []string) string {
+func buildFrontmatter(tags []string, sources []string, attachments []string) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
 	if len(tags) > 0 {
@@ -289,8 +309,16 @@ func buildFrontmatter(tags []string, source string, attachments []string) string
 	} else {
 		sb.WriteString("tags: []\n")
 	}
-	if source != "" {
-		sb.WriteString("source: " + source + "\n")
+	if len(sources) > 0 {
+		quoted := make([]string, len(sources))
+		for i, s := range sources {
+			if strings.ContainsAny(s, " \t,") {
+				quoted[i] = `"` + s + `"`
+			} else {
+				quoted[i] = s
+			}
+		}
+		sb.WriteString("sources: [" + strings.Join(quoted, ", ") + "]\n")
 	}
 	if len(attachments) > 0 {
 		sb.WriteString("attachments: [" + strings.Join(attachments, ", ") + "]\n")
@@ -299,7 +327,7 @@ func buildFrontmatter(tags []string, source string, attachments []string) string
 	return sb.String()
 }
 
-func parseFrontmatter(content string) (tags []string, source string, attachments []string, body string) {
+func parseFrontmatter(content string) (tags []string, sources []string, attachments []string, body string) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	inFM, first, afterFM := false, true, false
 	var bodyLines []string
@@ -324,8 +352,14 @@ func parseFrontmatter(content string) (tags []string, source string, attachments
 		if inFM {
 			if strings.HasPrefix(line, "tags:") {
 				tags = parseInlineList(line)
+			} else if strings.HasPrefix(line, "sources:") {
+				sources = parseInlineList(line)
 			} else if strings.HasPrefix(line, "source:") {
-				source = strings.TrimSpace(strings.TrimPrefix(line, "source:"))
+				// backwards compat: migrate single source to list
+				s := strings.TrimSpace(strings.TrimPrefix(line, "source:"))
+				if s != "" {
+					sources = []string{s}
+				}
 			} else if strings.HasPrefix(line, "attachments:") {
 				attachments = parseInlineList(line)
 			}
@@ -337,6 +371,7 @@ func parseFrontmatter(content string) (tags []string, source string, attachments
 	return
 }
 
+// parseInlineList parses a YAML inline list, respecting quoted values.
 func parseInlineList(line string) []string {
 	start := strings.Index(line, "[")
 	end := strings.LastIndex(line, "]")
@@ -348,10 +383,35 @@ func parseInlineList(line string) []string {
 		return nil
 	}
 	var out []string
-	for _, p := range strings.Split(inner, ",") {
-		if t := strings.TrimSpace(p); t != "" {
-			out = append(out, t)
+	for _, part := range splitRespectingQuotes(inner) {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, `"`)
+		if part != "" {
+			out = append(out, part)
 		}
 	}
 	return out
+}
+
+// splitRespectingQuotes splits on commas but not within double quotes.
+func splitRespectingQuotes(s string) []string {
+	var parts []string
+	var cur strings.Builder
+	inQuote := false
+	for _, ch := range s {
+		switch {
+		case ch == '"':
+			inQuote = !inQuote
+			cur.WriteRune(ch)
+		case ch == ',' && !inQuote:
+			parts = append(parts, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteRune(ch)
+		}
+	}
+	if cur.Len() > 0 {
+		parts = append(parts, cur.String())
+	}
+	return parts
 }

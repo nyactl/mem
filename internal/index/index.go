@@ -62,10 +62,10 @@ func Rebuild(notesDir string) (Index, error) {
 				tags = append(tags, t)
 			}
 		}
-		if n.Source != "" {
-			if _, ok := srcSeen[n.Source]; !ok {
-				srcSeen[n.Source] = struct{}{}
-				sources = append(sources, n.Source)
+		for _, s := range n.Sources {
+			if _, ok := srcSeen[s]; !ok {
+				srcSeen[s] = struct{}{}
+				sources = append(sources, s)
 			}
 		}
 	}

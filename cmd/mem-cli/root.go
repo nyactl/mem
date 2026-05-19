@@ -72,7 +72,8 @@ func pickNote(notes []note.Note) (note.Note, error) {
 	var lines []string
 	for _, n := range notes {
 		tags := strings.Join(n.Tags, ", ")
-		lines = append(lines, n.Path+"\t"+n.Slug+"\t"+n.CreatedStr()+"\t"+tags)
+		sources := strings.Join(n.Sources, ", ")
+		lines = append(lines, n.Path+"\t"+n.Slug+"\t"+n.CreatedStr()+"\t"+tags+"\t"+sources)
 	}
 
 	previewCmd := "bat --color=always --style=plain --language=markdown {1}"
@@ -82,7 +83,7 @@ func pickNote(notes []note.Note) (note.Note, error) {
 
 	args := []string{
 		"--delimiter=\t",
-		"--with-nth=2,3,4",
+		"--with-nth=2,3,4,5",
 		"--ansi",
 		"--no-sort",
 		"--preview", previewCmd,
@@ -122,7 +123,11 @@ func slugCompleter(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	}
 	out := make([]string, len(notes))
 	for i, n := range notes {
-		out[i] = n.Slug + "\t" + n.CreatedStr() + " [" + strings.Join(n.Tags, ", ") + "]"
+		meta := n.CreatedStr() + " [" + strings.Join(n.Tags, ", ") + "]"
+		if len(n.Sources) > 0 {
+			meta += " @" + strings.Join(n.Sources, ", @")
+		}
+		out[i] = n.Slug + "\t" + meta
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
