@@ -15,14 +15,15 @@ import (
 )
 
 var newLabels []string
-var newSource string
+var newSources []string
 var newFiles []string
 
 var newCmd = &cobra.Command{
 	Use:   "new [<title>]",
 	Short: "Create a new mem note",
 	Long: `Title is optional. When omitted the editor opens immediately; the first
-# Heading becomes the slug. Inline #tags and @source are extracted from the body.`,
+# Heading becomes the slug. Inline #tags and @source are extracted from the body.
+Multi-word sources: @"Thomas Müller"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 		ts := time.Now()
@@ -48,7 +49,7 @@ var newCmd = &cobra.Command{
 			if slug == "" {
 				return fmt.Errorf("title %q produces an empty slug", title)
 			}
-			path, err = note.Create(cfg.NotesDir, ts, slug, newLabels, newSource, attachmentPaths)
+			path, err = note.Create(cfg.NotesDir, ts, slug, newLabels, newSources, attachmentPaths)
 		}
 		if err != nil {
 			return err
@@ -58,12 +59,11 @@ var newCmd = &cobra.Command{
 			return err
 		}
 
-		finalPath, err := note.FinalizeNote(path, newLabels, newSource)
+		finalPath, err := note.FinalizeNote(path, newLabels, newSources)
 		if err != nil {
 			return err
 		}
 		if finalPath == "" {
-			// Empty draft discarded.
 			return nil
 		}
 
@@ -74,7 +74,7 @@ var newCmd = &cobra.Command{
 
 func init() {
 	newCmd.Flags().StringArrayVarP(&newLabels, "label", "l", nil, "tag, repeatable: -l kafka -l backend")
-	newCmd.Flags().StringVarP(&newSource, "source", "s", "", "source: person name or URL")
+	newCmd.Flags().StringArrayVarP(&newSources, "source", "s", nil, "source, repeatable: -s kate -s \"Thomas Müller\"")
 	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")
 	newCmd.RegisterFlagCompletionFunc("label", tagCompleter)
 	newCmd.RegisterFlagCompletionFunc("source", sourceCompleter)
