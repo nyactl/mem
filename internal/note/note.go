@@ -129,6 +129,25 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
+// SourcesFromNotes returns all unique non-empty source values across all notes.
+func SourcesFromNotes(dir string) ([]string, error) {
+	notes, err := List(dir)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	var out []string
+	for _, n := range notes {
+		if n.Source != "" {
+			if _, ok := seen[n.Source]; !ok {
+				seen[n.Source] = struct{}{}
+				out = append(out, n.Source)
+			}
+		}
+	}
+	return out, nil
+}
+
 // TagsFromNotes returns all unique tags across all notes with their counts.
 func TagsFromNotes(dir string) (map[string]int, error) {
 	notes, err := List(dir)

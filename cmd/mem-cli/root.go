@@ -127,6 +127,15 @@ func slugCompleter(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
+func sourceCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.Load()
+	sources, err := note.SourcesFromNotes(cfg.NotesDir)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return sources, cobra.ShellCompDirectiveNoFileComp
+}
+
 func tagCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.Load()
 	tags, err := backend.Tags(cfg.TagBackend)
