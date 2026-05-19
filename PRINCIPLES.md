@@ -1,7 +1,7 @@
 P1 — Capture-first
-mem should demand as little upfront organisation as possible. Title is optional;
-#tags and @sources can be written inline while thinking; the slug is derived
-after writing. The tool adapts to the human, not the other way around.
+Nothing should block the editor from opening. Title, tags, and source can all
+emerge during or after writing — inline while thinking, or added later. The tool
+adapts to the human, not the other way around.
 
 P2 — Shared external memory
 mem is readable and writable by both the user and AI. Plain text + structured
