@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"mem-cli/internal/backend"
 	"mem-cli/internal/config"
+	"mem-cli/internal/index"
 	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
@@ -129,24 +129,18 @@ func slugCompleter(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 func sourceCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.Load()
-	sources, err := note.SourcesFromNotes(cfg.NotesDir)
+	idx, err := index.Load(cfg.NotesDir)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return sources, cobra.ShellCompDirectiveNoFileComp
+	return idx.Sources, cobra.ShellCompDirectiveNoFileComp
 }
 
 func tagCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.Load()
-	tags, err := backend.Tags(cfg.TagBackend)
+	idx, err := index.Load(cfg.NotesDir)
 	if err != nil {
-		// Fall back to tags from existing notes.
-		counts, _ := note.TagsFromNotes(cfg.NotesDir)
-		names := make([]string, 0, len(counts))
-		for t := range counts {
-			names = append(names, t)
-		}
-		return names, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return tags, cobra.ShellCompDirectiveNoFileComp
+	return idx.Tags, cobra.ShellCompDirectiveNoFileComp
 }

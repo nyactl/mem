@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"mem-cli/internal/backend"
 	"mem-cli/internal/config"
 	"mem-cli/internal/note"
 
@@ -22,15 +21,6 @@ var tagsCmd = &cobra.Command{
 		counts, err := note.TagsFromNotes(cfg.NotesDir)
 		if err != nil {
 			return err
-		}
-
-		// Merge backend tags (count 0 for tags with no notes yet).
-		if backendTags, err := backend.Tags(cfg.TagBackend); err == nil {
-			for _, t := range backendTags {
-				if _, ok := counts[t]; !ok {
-					counts[t] = 0
-				}
-			}
 		}
 
 		if len(counts) == 0 {

@@ -8,6 +8,7 @@ import (
 
 	"mem-cli/internal/attachment"
 	"mem-cli/internal/config"
+	"mem-cli/internal/index"
 	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
@@ -46,7 +47,11 @@ var newCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return openEditor(path)
+		if err := openEditor(path); err != nil {
+			return err
+		}
+		_, _ = index.Rebuild(cfg.NotesDir)
+		return nil
 	},
 }
 
