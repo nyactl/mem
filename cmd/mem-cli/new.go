@@ -41,6 +41,14 @@ Multi-word sources: @"Thomas Müller"`,
 		var path string
 		var err error
 
+		// Slugify sources so format is consistent regardless of how they're typed.
+		sluggedSources := make([]string, 0, len(newSources))
+		for _, s := range newSources {
+			if slug := note.Slugify(s); slug != "" {
+				sluggedSources = append(sluggedSources, slug)
+			}
+		}
+
 		if len(args) == 0 {
 			path, err = note.CreateDraft(cfg.NotesDir, ts)
 		} else {
@@ -49,7 +57,7 @@ Multi-word sources: @"Thomas Müller"`,
 			if slug == "" {
 				return fmt.Errorf("title %q produces an empty slug", title)
 			}
-			path, err = note.Create(cfg.NotesDir, ts, slug, newLabels, newSources, attachmentPaths)
+			path, err = note.Create(cfg.NotesDir, ts, slug, newLabels, sluggedSources, attachmentPaths)
 		}
 		if err != nil {
 			return err
@@ -59,7 +67,7 @@ Multi-word sources: @"Thomas Müller"`,
 			return err
 		}
 
-		finalPath, err := note.FinalizeNote(path, newLabels, newSources)
+		finalPath, err := note.FinalizeNote(path, newLabels, sluggedSources)
 		if err != nil {
 			return err
 		}
