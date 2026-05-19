@@ -31,14 +31,16 @@ in frontmatter or file content.
 ```markdown
 ---
 tags: [kafka, rebalance]
-attachments:
-  - /Users/you/.mem/attachments/20260511T143022-rebalance-diagram.png
+source: kate
+attachments: [/Users/you/.mem/attachments/20260511T143022-rebalance-diagram.png]
 ---
+
 Consumer group rebalance blocks all partitions for ~2min with the default eager
 protocol. Fix: switch to cooperative-sticky assignor.
 ```
 
 - `tags` — always present, may be empty `[]`
+- `source` — omitted if none; person name or URL
 - `attachments` — omitted if none; absolute paths; multiple allowed
 - Nothing else — no `created`, no `updated`, no `title`
 
@@ -53,6 +55,7 @@ Create a new note.
 - Title is required — no args = error
 - Slug derived from title: `"Kafka Rebalance Blocks Partitions"` → `kafka-rebalance-blocks-partitions`
 - `-l/--label <tag>` — repeatable, tab-completes from tag backend
+- `-s/--source <value>` — person name or URL
 - `-f/--file <path>` — repeatable; copies file to `~/.mem/attachments/<timestamp>-<filename>`,
   adds absolute path to frontmatter `attachments` list
 - Opens `$EDITOR` after file is created
