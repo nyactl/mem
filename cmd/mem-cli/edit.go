@@ -35,9 +35,21 @@ var editCmd = &cobra.Command{
 			}
 		}
 
+		// Strip frontmatter before opening — human only sees body.
+		tags, sources, attachments, err := note.StripFrontmatter(n.Path)
+		if err != nil {
+			return err
+		}
+
 		if err := openEditor(n.Path); err != nil {
 			return err
 		}
+
+		// Restore frontmatter, merging any inline changes from the edit.
+		if _, err := note.FinalizeNote(n.Path, tags, sources, attachments); err != nil {
+			return err
+		}
+
 		_, _ = index.Rebuild(cfg.NotesDir)
 		return nil
 	},
