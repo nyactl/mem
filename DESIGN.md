@@ -139,6 +139,9 @@ Create a new note.
 - `--file <path>` — repeatable, no short flag; copies file to attachments dir
 - Opens `$EDITOR` with body only (no frontmatter)
 - After save: inline `#tags` and `@people` extracted, frontmatter written
+- If editor closes with empty body AND no flags supplied → file deleted, exit 0
+- If editor closes with empty body BUT flags were supplied → note saved with
+  frontmatter only, no body. Valid per P7 (gradual enrichment).
 
 ### `mem edit [<slug>]`
 
@@ -178,7 +181,7 @@ Browse notes interactively via fzf.
 
 ### `mem search <query>`
 
-Full-text search via ripgrep across `~/.mem/notes/`.
+Full-text search via ripgrep across `~/.mem/notes/`, including frontmatter.
 
 Output: slug + matching line with context, one result per match:
 ```
@@ -186,11 +189,13 @@ kafka-rebalance
   Consumer group rebalance blocks all partitions for ~2min
 
 kafka-session-timeout-default
+  from: [thomas-mueller]
   @thomas-mueller confirmed session timeout defaults to 3s
 ```
 
-Slug derived from filename, body only shown (frontmatter excluded from search).
-Multiple matches in one note appear as separate lines under the same slug.
+Searching frontmatter ensures `mem search thomas-mueller` finds notes where he
+appears only in `from:` and not in prose. Slug derived from filename. Multiple
+matches in one note appear as separate lines under the same slug.
 
 ### `mem tags`
 
@@ -284,6 +289,31 @@ mtime is checked — if stale, index is rebuilt before returning. The notes
 themselves are always the source of truth; the index is a derived cache.
 
 ---
+
+## Exit codes
+
+Consistent across all commands for scripting (P8):
+
+| Code | Meaning |
+|------|---------|
+| `0`  | Success — including deliberate no-op (empty editor close, fzf cancelled) |
+| `1`  | Error — note not found, invalid slug, file write failed |
+| `2`  | Usage error — wrong flags, missing required argument |
+| `130`| Interrupted — Ctrl-C, user cancelled fzf picker |
+
+Empty editor close is always `0` — a deliberate choice, not a failure.
+
+## Empty notes directory
+
+When the notes directory is empty or does not exist, commands that list or
+search notes print a single message to stderr and exit `0`:
+
+```
+No notes yet — run: mem new
+```
+
+fzf is not invoked with empty input — a blank screen with no explanation is
+worse than a clear message.
 
 ## Config
 

@@ -34,3 +34,8 @@ Q14: mem ls fzf key bindings [done — Enter=view, Ctrl-E=edit, Ctrl-R=rename, s
 Q15: mem get vs mem edit fzf picker [done — shared picker, action differs on selection, see DESIGN.md]
 Q16: config schema [done — full schema with defaults documented, see DESIGN.md]
 
+Q17: flag-only notes [done — valid if flags supplied, deleted only if truly empty, see DESIGN.md]
+Q18: mem search scope [done — searches full file including frontmatter, see DESIGN.md]
+Q19: exit codes [done — 0/1/2/130 table documented, see DESIGN.md]
+Q20: mem ls empty directory [done — helpful message to stderr, exit 0, see DESIGN.md]
+
