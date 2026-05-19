@@ -58,8 +58,20 @@ extracts them and merges with any flag-supplied metadata.
 
 - `#tag` — inline tag, e.g. `#kafka`, `#ios`
 - `@slug` — inline attribution, e.g. `@kate`, `@thomas-mueller`, `@acme-team`
+- `[[slug]]` — explicit cross-reference, e.g. `[[kafka-rebalance]]`
 
-Both are optional. A note with no tags and no attribution is valid.
+All are optional. A note with no tags, no attribution, and no links is valid.
+
+**Extraction safety — stripped before regex runs:**
+
+1. Fenced code blocks (` ```...``` `)
+2. Indented code blocks (4-space prefix lines)
+3. Inline code (`` `...` `` spans)
+4. URLs (`https?://\S+`) — prevents `#fragment` and `@user` in URLs being
+   extracted as tags or from values
+
+Stripping order matters: code blocks first, then inline code, then URLs. What
+remains is prose — the only text where inline notation is meaningful.
 
 ---
 
@@ -178,6 +190,32 @@ Attach a file to an existing note.
 - Copies file to `~/.mem/attachments/<note-timestamp>-<filename>`
 - Appends absolute path to note's frontmatter `attachments` list
 
+### `mem serve [--port <n>] [--lan]`
+
+Start a local HTTP capture server.
+
+- Default port: `4444`
+- Binds to `127.0.0.1` by default — `--lan` to expose on the local network
+- Single-page form: body textarea, optional title, optional tag/from fields
+- On submit: creates a timestamp-only note, runs FinalizeNote, rebuilds index
+- Foreground process — Ctrl-C to stop. No daemon, no background mode.
+- Capture only — no editing, no browsing. Those stay CLI.
+
+### `mem similar <query>`
+
+Semantic search using local embeddings.
+
+- Free-text query embedded on the fly, matched against stored note vectors
+- Output: ranked list of slugs with similarity score
+- Requires an embeddings endpoint (default: ollama at `http://localhost:11434`)
+- Endpoint configurable in `~/.config/mem/config.json` via `embeddings_url`
+- Errors with a setup message if the endpoint is unreachable — no silent fallback
+- Vector store: `~/.mem/notes/.mem-vectors.db` (SQLite, one row per note)
+- Embeddings are generated lazily — on first `mem similar` call or via
+  `mem index --embeddings`
+- Staleness: note mtime compared against last-embedded timestamp; stale notes
+  re-embedded automatically before search
+
 ---
 
 ## Index cache
@@ -204,7 +242,8 @@ themselves are always the source of truth; the index is a derived cache.
 `~/.config/mem/config.json`:
 ```json
 {
-  "attachment_backend": "local"
+  "attachment_backend": "local",
+  "embeddings_url": "http://localhost:11434"
 }
 ```
 
@@ -313,6 +352,39 @@ Implicit alone misses connections the author explicitly has in mind. Explicit
 alone requires discipline and adds friction. Combined: implicit handles the
 common case, `[[slug]]` is available when the author wants to state a connection
 directly.
+
+---
+
+### `mem serve` binds localhost by default
+
+**Decision:** `mem serve` binds to `127.0.0.1` unless `--lan` is passed.
+
+LAN exposure means anyone on the network can read and write your notes without
+authentication. Opt-in only. Default protects users who run `mem serve` without
+thinking about network access.
+
+---
+
+### Semantic search requires explicit setup
+
+**Decision:** `mem similar` errors clearly when the embeddings endpoint is
+unreachable. No silent fallback to ripgrep.
+
+Falling back would change the command's semantics — the user asked for semantic
+results, not keyword results. A clear error with setup instructions is more
+honest. The embedding model (default: ollama `nomic-embed-text`) is ~274MB and
+runs on CPU — reasonable ask for a knowledge base tool.
+
+---
+
+### Inline extraction strips code and URLs first
+
+**Decision:** before extracting `#tags`, `@from`, and `[[links]]`, strip fenced
+code blocks, indented code blocks, inline code spans, and URLs from the body.
+
+Prevents false positives: `#readme` in a GitHub URL, `@user` in an email
+address, `[[bracket]]` in code examples. The extraction order is deterministic:
+code blocks → inline code → URLs → extract. What remains is prose only.
 
 ---
 
