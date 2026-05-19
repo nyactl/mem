@@ -107,8 +107,7 @@ func FinalizeNote(path string, extraTags []string, extraSources []string) (strin
 
 var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)
 
-// reInlineSource matches @word or @"Multi Word Name".
-var reInlineSource = regexp.MustCompile(`@"([^"]+)"|@([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9_-]*)`)
+var reInlineSource = regexp.MustCompile(`@([a-z][a-z0-9-]*)`)
 
 var reHeading = regexp.MustCompile(`(?m)^#\s+(.+)$`)
 
@@ -131,15 +130,7 @@ func extractInlineSources(body string) []string {
 	seen := make(map[string]struct{})
 	var out []string
 	for _, m := range matches {
-		// m[1] = quoted group, m[2] = bare word group
 		s := m[1]
-		if s == "" {
-			s = m[2]
-		}
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
 		if _, ok := seen[s]; !ok {
 			seen[s] = struct{}{}
 			out = append(out, s)
@@ -310,15 +301,7 @@ func buildFrontmatter(tags []string, sources []string, attachments []string) str
 		sb.WriteString("tags: []\n")
 	}
 	if len(sources) > 0 {
-		quoted := make([]string, len(sources))
-		for i, s := range sources {
-			if strings.ContainsAny(s, " \t,") {
-				quoted[i] = `"` + s + `"`
-			} else {
-				quoted[i] = s
-			}
-		}
-		sb.WriteString("sources: [" + strings.Join(quoted, ", ") + "]\n")
+		sb.WriteString("sources: [" + strings.Join(sources, ", ") + "]\n")
 	}
 	if len(attachments) > 0 {
 		sb.WriteString("attachments: [" + strings.Join(attachments, ", ") + "]\n")
@@ -356,7 +339,7 @@ func parseFrontmatter(content string) (tags []string, sources []string, attachme
 				sources = parseInlineList(line)
 			} else if strings.HasPrefix(line, "source:") {
 				// backwards compat: migrate single source to list
-				s := strings.TrimSpace(strings.TrimPrefix(line, "source:"))
+				s := Slugify(strings.TrimSpace(strings.TrimPrefix(line, "source:")))
 				if s != "" {
 					sources = []string{s}
 				}
@@ -371,7 +354,6 @@ func parseFrontmatter(content string) (tags []string, sources []string, attachme
 	return
 }
 
-// parseInlineList parses a YAML inline list, respecting quoted values.
 func parseInlineList(line string) []string {
 	start := strings.Index(line, "[")
 	end := strings.LastIndex(line, "]")
@@ -383,35 +365,10 @@ func parseInlineList(line string) []string {
 		return nil
 	}
 	var out []string
-	for _, part := range splitRespectingQuotes(inner) {
-		part = strings.TrimSpace(part)
-		part = strings.Trim(part, `"`)
-		if part != "" {
-			out = append(out, part)
+	for _, p := range strings.Split(inner, ",") {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
 		}
 	}
 	return out
-}
-
-// splitRespectingQuotes splits on commas but not within double quotes.
-func splitRespectingQuotes(s string) []string {
-	var parts []string
-	var cur strings.Builder
-	inQuote := false
-	for _, ch := range s {
-		switch {
-		case ch == '"':
-			inQuote = !inQuote
-			cur.WriteRune(ch)
-		case ch == ',' && !inQuote:
-			parts = append(parts, cur.String())
-			cur.Reset()
-		default:
-			cur.WriteRune(ch)
-		}
-	}
-	if cur.Len() > 0 {
-		parts = append(parts, cur.String())
-	}
-	return parts
 }
