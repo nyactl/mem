@@ -41,8 +41,9 @@ func Filename(ts time.Time, slug string) string {
 	return ts.Format(tsFormat) + "-" + slug + ".md"
 }
 
-// Create writes a new note file with frontmatter and returns its path.
-func Create(dir string, ts time.Time, slug string, tags []string, sources []string, attachments []string) (string, error) {
+// Create writes a new note file with a heading prompt and returns its path.
+// Frontmatter is not written — FinalizeNote generates it after the editor closes.
+func Create(dir string, ts time.Time, slug string) (string, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create notes dir: %w", err)
 	}
@@ -50,21 +51,39 @@ func Create(dir string, ts time.Time, slug string, tags []string, sources []stri
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("note %q already exists — use: mem edit %s", slug, slug)
 	}
-	content := buildFrontmatter(tags, sources, attachments) + "\n"
+	title := strings.ReplaceAll(slug, "-", " ")
+	title = strings.Title(title)
+	content := "# " + title + "\n\n"
 	return path, os.WriteFile(path, []byte(content), 0600)
 }
 
-// CreateDraft writes a placeholder note (no title yet) and returns its path.
-// Call FinalizeNote after the editor closes to derive slug and inline metadata.
+// CreateDraft writes a blank note file and returns its path.
+// FinalizeNote derives everything from what the human writes.
 func CreateDraft(dir string, ts time.Time) (string, error) {
-	return Create(dir, ts, "draft", nil, nil, nil)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", fmt.Errorf("create notes dir: %w", err)
+	}
+	path := filepath.Join(dir, Filename(ts, "draft"))
+	return path, os.WriteFile(path, []byte(""), 0600)
+}
+
+// StripFrontmatter removes the frontmatter block from the file on disk and
+// returns the extracted metadata. Call before opening an editor so the human
+// only sees the note body.
+func StripFrontmatter(path string) (tags []string, sources []string, attachments []string, err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tags, sources, attachments, body := parseFrontmatter(string(data))
+	return tags, sources, attachments, os.WriteFile(path, []byte(body), 0600)
 }
 
 // FinalizeNote reads a note after editing, extracts inline #tags and @sources
-// from the body, merges them with frontmatter, and renames the file if the
-// first # Heading provides a better slug than the current one.
+// from the body, merges with any extra metadata, writes frontmatter, and
+// renames the file if the first # Heading provides a better slug.
 // Returns the (possibly new) path.
-func FinalizeNote(path string, extraTags []string, extraSources []string) (string, error) {
+func FinalizeNote(path string, extraTags []string, extraSources []string, extraAttachments []string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return path, err
@@ -80,6 +99,7 @@ func FinalizeNote(path string, extraTags []string, extraSources []string) (strin
 	tags = mergeTags(tags, extractInlineTags(body))
 	sources = mergeSources(sources, extraSources)
 	sources = mergeSources(sources, extractInlineSources(body))
+	attachments = append(attachments, extraAttachments...)
 
 	newSlug := extractHeading(body)
 	_, currentSlug, _ := parseFilename(filepath.Base(path))
