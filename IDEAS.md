@@ -39,3 +39,8 @@ Q18: mem search scope [done — searches full file including frontmatter, see DE
 Q19: exit codes [done — 0/1/2/130 table documented, see DESIGN.md]
 Q20: mem ls empty directory [done — helpful message to stderr, exit 0, see DESIGN.md]
 
+Q21: mem edit on unnamed note [done — bare timestamp accepted as identifier, see DESIGN.md]
+Q22: mem rename on unnamed note [done — FindByIdentifier accepts slug or timestamp, see DESIGN.md]
+Q23: attachment filename collision [done — nanosecond timestamp prefix, see DESIGN.md]
+Q24: fzf preview [done — body only, tags/from visible in fzf columns, see DESIGN.md]
+
