@@ -22,3 +22,22 @@ P5 — Durable storage
 Plain text markdown with YAML frontmatter. The format predates and will outlive
 mem-cli. Notes remain readable and searchable with any text tool if mem-cli
 disappears.
+
+P6 — Atomic
+One note, one idea. Not a document, not a log. A note that covers multiple
+unrelated things is harder to tag, harder to find, and harder to enrich. When
+in doubt, split.
+
+P7 — Gradual enrichment
+A note is valid the moment it is captured, even if sparse. Tags, sources, and
+attachments can be added later — by the user or by AI. Depth accumulates over
+time without requiring completeness upfront.
+
+P8 — Composable
+mem is one tool in a chain, not a monolith. It speaks plain text and works with
+ripgrep, fzf, bat, and other CLIs. It does not own the workflow — it owns the
+store.
+
+P9 — Local-first
+Notes live on the user's machine. No cloud sync, no telemetry, no accounts.
+The user decides if and how notes leave the device.
