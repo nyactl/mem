@@ -143,26 +143,30 @@ Create a new note.
 - If editor closes with empty body BUT flags were supplied → note saved with
   frontmatter only, no body. Valid per P7 (gradual enrichment).
 
-### `mem edit [<slug>]`
+### `mem edit [<identifier>]`
 
 Open a note in `$EDITOR`.
 
-- No slug → shared fzf picker (same as `mem get`, action on selection differs)
+- No identifier → shared fzf picker (same as `mem get`, action on selection differs)
+- Identifier is a slug (`kafka-rebalance`) or bare timestamp (`20260519T143022`)
+- Bare timestamp addresses unnamed notes directly
 - Frontmatter stripped before editor opens, restored after (sandwich pattern)
-- Tab-completes slugs
+- Tab-completes slugs and bare timestamps of unnamed notes
 
-### `mem get [<slug>]`
+### `mem get [<identifier>]`
 
 View a note.
 
-- No slug → shared fzf picker (same as `mem edit`, opens in bat on selection)
+- No identifier → shared fzf picker (same as `mem edit`, opens in bat on selection)
+- Identifier is a slug or bare timestamp
 - Displays body only — frontmatter stripped, consistent with what the human writes
 - Opens in bat (pager mode); falls back to less, then cat
-- Tab-completes slugs
+- Tab-completes slugs and bare timestamps of unnamed notes
 
 `mem get` and `mem edit` share one picker implementation. The action on
 selection is the only difference — view vs edit. Same list, same preview pane,
-same key bindings.
+same key bindings. fzf preview shows body only — tags and from are visible
+in the fzf line columns and need not be repeated in the preview.
 
 ### `mem ls [--tag <tag>] [--from <person>] [--unnamed]`
 
@@ -218,21 +222,26 @@ List all `from` values across notes. Output: `<slug>\t<count>`
 
 Symmetric with `mem tags`. Used by nvim integration and shell completion.
 
-### `mem rename <old-slug> <new-slug>`
+### `mem rename <identifier> <new-title>`
 
 Rename a note's slug. Rebuilds index. Warns if other notes reference the old
 slug but does not update them.
+
+- Identifier is a slug or bare timestamp — bare timestamp addresses unnamed notes
+- New title is slugified automatically: `Kafka Session Timeout` → `kafka-session-timeout`
 
 ### `mem mv <old-slug> <new-slug>`
 
 Rename a note's slug AND rewrite all `@slug` and `[[slug]]` references across
 every note. Shows a confirmation prompt listing affected files before writing.
 
-### `mem attach <slug> <file>`
+### `mem attach <identifier> <file>`
 
 Attach a file to an existing note.
 
-- Copies file to `~/.mem/attachments/<note-timestamp>-<filename>`
+- Identifier is a slug or bare timestamp
+- Copies file to `~/.mem/attachments/<nanosecond-timestamp>-<filename>`
+- Nanosecond timestamp prefix guarantees uniqueness without hashing
 - Appends absolute path to note's frontmatter `attachments` list
 
 ### `mem serve [--port <n>] [--lan] [--token <secret>]`
@@ -500,6 +509,28 @@ Considered: always writing `tags: []` as an explicit signal the note has been
 processed. Rejected — the sandwich pattern guarantees finalization runs on every
 save, so an empty list carries no useful information. Omitting empty fields
 keeps frontmatter quiet and consistent across all fields.
+
+---
+
+### Note identifiers: slug or bare timestamp
+
+**Decision:** everywhere a slug is accepted as an argument, a bare timestamp
+(`20260519T143022`) is also accepted. Unnamed notes have no slug — the
+timestamp is their only identifier.
+
+`FindBySlug` becomes `FindByIdentifier`: checks if the argument matches a slug
+first, then falls back to timestamp prefix match. Tab completion includes both
+slugs and bare timestamps of unnamed notes.
+
+---
+
+### Attachment filenames use nanosecond timestamps
+
+**Decision:** attachment files are named `<nanosecond-timestamp>-<filename>`,
+e.g. `20260519T143022143000000-diagram.pdf`.
+
+Nanosecond precision makes collisions practically impossible without hashing or
+counters. The filename stays human-readable. No external dependencies.
 
 ---
 
