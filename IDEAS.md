@@ -44,3 +44,8 @@ Q22: mem rename on unnamed note [done — FindByIdentifier accepts slug or times
 Q23: attachment filename collision [done — nanosecond timestamp prefix, see DESIGN.md]
 Q24: fzf preview [done — body only, tags/from visible in fzf columns, see DESIGN.md]
 
+Q25: mem mv --yes flag [done — --yes/-y skips prompt, non-TTY without --yes exits 2, see DESIGN.md]
+Q26: mem serve form format [done — inline notation only, no separate tag/from fields, see DESIGN.md]
+Q27: timestamp completions [done — shown with first body line as context, see DESIGN.md]
+Q28: index staleness [done — mtime sufficient, mem index is escape hatch, see DESIGN.md]
+
