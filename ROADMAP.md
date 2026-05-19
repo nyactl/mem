@@ -80,23 +80,6 @@ No separate contacts store — P3 and P8. One place, all commands work for free.
 
 ---
 
-## mem serve
-
-Local HTTP capture server for mobile and non-CLI capture.
-
-```
-mem serve --lan    # expose on local network, accessible from phone
-```
-
-Single-page form: body textarea, optional title, tag, and from fields. On
-submit creates a timestamp-only note and runs the full finalization pipeline.
-Foreground process, Ctrl-C to stop. Capture only — no editing or browsing.
-
-Binds to `127.0.0.1` by default. `--lan` opts in to LAN exposure — anyone on
-the network can write notes, so this is explicit. No authentication.
-
----
-
 ## mem similar
 
 Semantic search via local embeddings.
