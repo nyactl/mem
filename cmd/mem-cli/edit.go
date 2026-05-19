@@ -2,6 +2,7 @@ package main
 
 import (
 	"mem-cli/internal/config"
+	"mem-cli/internal/index"
 	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
@@ -34,7 +35,11 @@ var editCmd = &cobra.Command{
 			}
 		}
 
-		return openEditor(n.Path)
+		if err := openEditor(n.Path); err != nil {
+			return err
+		}
+		_, _ = index.Rebuild(cfg.NotesDir)
+		return nil
 	},
 }
 
