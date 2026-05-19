@@ -7,6 +7,7 @@ import (
 
 	"mem-cli/internal/attachment"
 	"mem-cli/internal/config"
+	"mem-cli/internal/index"
 	"mem-cli/internal/note"
 
 	"github.com/spf13/cobra"
@@ -36,7 +37,11 @@ var attachCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "attached → %s\n", dst)
 		}
 
-		return note.UpdateAttachments(n.Path, newPaths)
+		if err := note.UpdateAttachments(n.Path, newPaths); err != nil {
+			return err
+		}
+		_, _ = index.Rebuild(cfg.NotesDir)
+		return nil
 	},
 }
 
