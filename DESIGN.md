@@ -144,7 +144,7 @@ Create a new note.
 
 Open a note in `$EDITOR`.
 
-- No slug → fzf picker over all notes, bat preview pane
+- No slug → shared fzf picker (same as `mem get`, action on selection differs)
 - Frontmatter stripped before editor opens, restored after (sandwich pattern)
 - Tab-completes slugs
 
@@ -152,10 +152,14 @@ Open a note in `$EDITOR`.
 
 View a note.
 
-- No slug → fzf picker
+- No slug → shared fzf picker (same as `mem edit`, opens in bat on selection)
 - Displays body only — frontmatter stripped, consistent with what the human writes
 - Opens in bat (pager mode); falls back to less, then cat
 - Tab-completes slugs
+
+`mem get` and `mem edit` share one picker implementation. The action on
+selection is the only difference — view vs edit. Same list, same preview pane,
+same key bindings.
 
 ### `mem ls [--tag <tag>] [--from <person>] [--unnamed]`
 
@@ -166,6 +170,11 @@ Browse notes interactively via fzf.
 - `--unnamed` — shows only timestamp-only notes (the inbox queue), sorted oldest first
 - Each fzf line: `<slug>\t<tags>\t<from>\t<created>` — unnamed notes show `(unnamed)` in the slug column
 - bat preview pane
+- Key bindings:
+  - `Enter` — open selected note in `mem get` (view)
+  - `Ctrl-E` — open selected note in `mem edit`
+  - `Ctrl-R` — rename selected note (prompts for new title)
+  - No delete binding — destructive actions stay explicit CLI commands
 
 ### `mem search <query>`
 
@@ -221,12 +230,16 @@ Attach a file to an existing note.
 - Copies file to `~/.mem/attachments/<note-timestamp>-<filename>`
 - Appends absolute path to note's frontmatter `attachments` list
 
-### `mem serve [--port <n>] [--lan]`
+### `mem serve [--port <n>] [--lan] [--token <secret>]`
 
 Start a local HTTP capture server.
 
 - Default port: `4444`
 - Binds to `127.0.0.1` by default — `--lan` to expose on the local network
+- `--token <secret>` — when set, all requests must supply `?token=<secret>`.
+  Intended for `--lan`: bookmark `http://192.168.1.x:4444/?token=abc123` on
+  your phone. No sessions, no OAuth — shared secret is sufficient for a
+  trusted local network. Requests without a valid token return 403.
 - Single-page form: body textarea, optional title, optional tag/from fields
 - Empty title field → timestamp-only note (mirrors `mem new` with no title)
 - Filled title field → slugified filename
@@ -272,21 +285,32 @@ themselves are always the source of truth; the index is a derived cache.
 
 ---
 
-## Attachment backend
+## Config
 
-`~/.config/mem/config.json`:
+`~/.config/mem/config.json` — all fields optional, defaults shown:
+
 ```json
 {
+  "notes_dir":          "~/.mem/notes",
+  "attachments_dir":    "~/.mem/attachments",
   "attachment_backend": "local",
-  "embeddings_url": "http://localhost:11434"
+  "embeddings_url":     "http://localhost:11434"
 }
 ```
 
-**`local` (default)** — copies file to `~/.mem/attachments/<timestamp>-<filename>`,
-stores absolute path in frontmatter.
+- `notes_dir` — where note files live
+- `attachments_dir` — where attached files are copied (local backend)
+- `attachment_backend` — `"local"` or `"paperless-ngx-cli"`
+- `embeddings_url` — OpenAI-compatible embeddings endpoint for `mem similar`
 
-**`paperless-ngx-cli` (future)** — uploads via paperless-ngx-cli, stores
-document ID or URL. Enables paperless-ngx as the document store.
+If the config file does not exist, all defaults apply. No error, no prompt.
+Unknown fields are ignored — forward compatibility.
+
+**`local` attachment backend (default)** — copies file to
+`<attachments_dir>/<timestamp>-<filename>`, stores absolute path in frontmatter.
+
+**`paperless-ngx-cli` attachment backend (future)** — uploads via
+paperless-ngx-cli, stores document ID or URL in frontmatter.
 
 mem-cli never reads attachment content — it only stores and displays the
 reference.
@@ -394,9 +418,11 @@ directly.
 
 **Decision:** `mem serve` binds to `127.0.0.1` unless `--lan` is passed.
 
-LAN exposure means anyone on the network can read and write your notes without
-authentication. Opt-in only. Default protects users who run `mem serve` without
-thinking about network access.
+LAN exposure means anyone on the network can write your notes without
+authentication. Opt-in only. `--token` adds a shared secret for `--lan` use —
+sufficient for a trusted local network without adding sessions or OAuth.
+Default `127.0.0.1` protects users who run `mem serve` without thinking about
+network access.
 
 ---
 

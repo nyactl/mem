@@ -29,3 +29,8 @@ Q10: mem search output format [done — slug + matching line with context, see D
 Q11: mem serve form behavior [done — empty title → unnamed note, inline confirmation, see DESIGN.md]
 Q12: nvim integration [done — documented in Tags section of DESIGN.md]
 
+Q13: mem serve LAN protection [done — --token shared secret, 403 on mismatch, see DESIGN.md]
+Q14: mem ls fzf key bindings [done — Enter=view, Ctrl-E=edit, Ctrl-R=rename, see DESIGN.md]
+Q15: mem get vs mem edit fzf picker [done — shared picker, action differs on selection, see DESIGN.md]
+Q16: config schema [done — full schema with defaults documented, see DESIGN.md]
+
