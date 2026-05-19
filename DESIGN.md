@@ -1,9 +1,7 @@
 # mem-cli
 
-Shared external memory for human and AI. Atomic, tagged notes for facts,
-findings, commands, and ideas — captured quickly, looked up fast.
-
-Fully independent. No dependency on ryo or any other tool.
+Shared external memory for human and AI. Atomic notes for facts, findings,
+commands, and ideas — captured quickly, looked up fast.
 
 ---
 
@@ -21,68 +19,133 @@ Config: `$XDG_CONFIG_HOME/mem/config.json` → `~/.config/mem/config.json`
 
 ## File format
 
-**Filename:** `20260511T143022-<slug>.md`
+**Filename:** `20260511T143022-kafka-rebalance.md`
 
-Timestamp prefix is the sole source of creation time — it does not appear again
-in frontmatter or file content.
+The slug in the filename is the title. It does not appear again inside the
+file — no `# Heading`, no `title:` field. Timestamp prefix is the sole source
+of creation time.
 
-**Frontmatter:**
+**Frontmatter** (tool-managed, never shown to the human):
 
 ```markdown
 ---
 tags: [kafka, rebalance]
-source: kate
-attachments: [/Users/you/.mem/attachments/20260511T143022-rebalance-diagram.png]
+from: [kate, thomas-mueller]
+attachments: [/Users/you/.mem/attachments/20260511T143022-diagram.png]
 ---
 
 Consumer group rebalance blocks all partitions for ~2min with the default eager
-protocol. Fix: switch to cooperative-sticky assignor.
+protocol. Fix: switch to cooperative-sticky assignor. Confirmed by @kate.
 ```
 
-- `tags` — always present, may be empty `[]`
-- `source` — omitted if none; person name or URL
-- `attachments` — omitted if none; absolute paths; multiple allowed
+- `tags` — omitted if none
+- `from` — omitted if none; list of person slugs (who told you)
+- `attachments` — omitted if none; absolute paths
 - Nothing else — no `created`, no `updated`, no `title`
+
+`from` is people only — slugs that map to `@` inline mentions. URLs belong
+inline in the body as markdown links, not in `from`.
+
+**The human only writes the body.** Frontmatter is stripped before the editor
+opens and regenerated after it closes (sandwich pattern).
+
+---
+
+## Inline notation
+
+Tags and people can be expressed inline in the note body. `FinalizeNote`
+extracts them and merges with any flag-supplied metadata.
+
+- `#tag` — inline tag, e.g. `#kafka`, `#ios`
+- `@slug` — inline attribution, e.g. `@kate`, `@thomas-mueller`, `@acme-team`
+
+Both are optional. A note with no tags and no attribution is valid.
+
+---
+
+## Tags
+
+**Format:** lowercase, hyphens — `kafka`, `consumer-group`, `ios`
+
+**Source of truth:** the notes themselves. mem scans all notes and builds a
+local index cache at `~/.mem/notes/.mem-index.json` after every write. The
+index stores all unique tags and `from` values for O(1) shell completion — no
+external backend.
+
+**Consistency:** enforced by completion, not by the tool. The inline regex
+accepts only `[a-z][a-z0-9-]*` — uppercase and special characters are silently
+dropped at finalization. Shell and editor completions steer the human to
+existing spellings; the format constraint prevents divergence.
+
+**Shell completion:** `-l/--label` flag reads from the index via `mem tags`.
+
+**Editor completion (nvim):** nvim reads `~/.mem/notes/.mem-index.json`
+directly. The index has `tags[]`, `from[]`, and `links[]`. A small Lua snippet in nvim
+config offers completions on `#` trigger (tags) and `@` trigger (people).
+No new mem commands are needed — the store is the interface (P2, P8).
+
+---
+
+## From
+
+**Format:** slug — lowercase, hyphens — `kate`, `thomas-mueller`, `acme-team`
+
+**Rationale:** `@slug` inline syntax requires a single token. Spaces are
+incompatible with `@word` matching. The slug is the natural form for inline
+mention. Values can be individuals, groups, teams, or any named origin.
+
+**Multiple values:** a note can have many. Stored as a list in frontmatter
+(`from: [kate, thomas-mueller]`) and deduplicated on merge. Meetings with
+multiple participants are the canonical case.
+
+**URLs:** not stored in `from`. URLs are references, not attribution — put them
+inline in the body as markdown links.
+
+**Shell completion:** `-f/--from <slug>` flag reads from the index. Editor
+completion same as tags via index.json.
 
 ---
 
 ## Commands
 
-### `mem new <title> [-l <tag>] [-f <file>]`
+### `mem new [<title>] [-l <tag>] [-f <person>] [--file <path>]`
 
 Create a new note.
 
-- Title is required — no args = error
-- Slug derived from title: `"Kafka Rebalance Blocks Partitions"` → `kafka-rebalance-blocks-partitions`
-- `-l/--label <tag>` — repeatable, tab-completes from tag backend
-- `-s/--source <value>` — person name or URL
-- `-f/--file <path>` — repeatable; copies file to `~/.mem/attachments/<timestamp>-<filename>`,
-  adds absolute path to frontmatter `attachments` list
-- Opens `$EDITOR` after file is created
-
-### `mem get [<slug>]`
-
-View a note.
-
-- No slug → fzf picker over all notes, bat preview pane
-- With slug → opens in bat (pager mode); falls back to less, then cat
-- Tab-completes slugs
+- Title is optional — sets the filename slug at creation time
+- No title → timestamp-only file (`20260519T143022.md`), rename later with `mem rename`
+- `-l/--label <tag>` — repeatable, tab-completes from index
+- `-f/--from <slug>` — repeatable, tab-completes from index
+- `--file <path>` — repeatable, no short flag; copies file to attachments dir
+- Opens `$EDITOR` with body only (no frontmatter)
+- After save: inline `#tags` and `@people` extracted, frontmatter written
 
 ### `mem edit [<slug>]`
 
 Open a note in `$EDITOR`.
 
-- No slug → fzf picker
+- No slug → fzf picker over all notes, bat preview pane
+- Frontmatter stripped before editor opens, restored after (sandwich pattern)
 - Tab-completes slugs
 
-### `mem ls [--tag <tag>]`
+### `mem get [<slug>]`
+
+View a note.
+
+- No slug → fzf picker
+- Displays body only — frontmatter stripped, consistent with what the human writes
+- Opens in bat (pager mode); falls back to less, then cat
+- Tab-completes slugs
+
+### `mem ls [--tag <tag>] [--from <person>] [--unnamed]`
 
 Browse notes interactively via fzf.
 
-- Invokes fzf with bat preview pane
-- `--tag/-t` — pre-filters by tag before passing to fzf
-- Each line passed to fzf: `<slug>\t<tags>\t<created>`
-- Tab-completes tags
+- `--tag/-t` — pre-filters by tag
+- `--from` — pre-filters by person
+- `--unnamed` — shows only timestamp-only notes (the inbox queue), sorted oldest first
+- Each fzf line: `<slug>\t<tags>\t<from>\t<created>` — unnamed notes show `(unnamed)` in the slug column
+- bat preview pane
 
 ### `mem search <query>`
 
@@ -90,9 +153,23 @@ Full-text search via ripgrep across `~/.mem/notes/`.
 
 ### `mem tags`
 
-List all tags with note counts.
+List all tags with note counts. Output: `<tag>\t<count>`
 
-Output: `<tag>\t<count>` — includes tags from notes and from the configured backend.
+### `mem from`
+
+List all `from` values across notes. Output: `<slug>\t<count>`
+
+Symmetric with `mem tags`. Used by nvim integration and shell completion.
+
+### `mem rename <old-slug> <new-slug>`
+
+Rename a note's slug. Rebuilds index. Warns if other notes reference the old
+slug but does not update them.
+
+### `mem mv <old-slug> <new-slug>`
+
+Rename a note's slug AND rewrite all `@slug` and `[[slug]]` references across
+every note. Shows a confirmation prompt listing affected files before writing.
 
 ### `mem attach <slug> <file>`
 
@@ -100,14 +177,29 @@ Attach a file to an existing note.
 
 - Copies file to `~/.mem/attachments/<note-timestamp>-<filename>`
 - Appends absolute path to note's frontmatter `attachments` list
-- Note timestamp is parsed from the note's filename
+
+---
+
+## Index cache
+
+`~/.mem/notes/.mem-index.json`:
+
+```json
+{
+  "dir_mtime": 1234567890,
+  "tags": ["kafka", "kubernetes", "music"],
+  "from": ["kate", "thomas-mueller"],
+  "links": ["kafka-rebalance", "partition-strategy"]
+}
+```
+
+Rebuilt after every write (`mem new`, `mem edit`, `mem attach`). On read, dir
+mtime is checked — if stale, index is rebuilt before returning. The notes
+themselves are always the source of truth; the index is a derived cache.
 
 ---
 
 ## Attachment backend
-
-Attachment storage is pluggable. The backend receives a file and returns a
-reference stored in the note's frontmatter `attachments` list.
 
 `~/.config/mem/config.json`:
 ```json
@@ -119,42 +211,255 @@ reference stored in the note's frontmatter `attachments` list.
 **`local` (default)** — copies file to `~/.mem/attachments/<timestamp>-<filename>`,
 stores absolute path in frontmatter.
 
-**`paperless-ngx-cli` (future)** — uploads file via paperless-ngx-cli, stores
-document ID or URL in frontmatter. Enables paperless-ngx as the document store
-for all mem attachments.
+**`paperless-ngx-cli` (future)** — uploads via paperless-ngx-cli, stores
+document ID or URL. Enables paperless-ngx as the document store.
 
-The frontmatter reference format depends on the backend:
-```yaml
-# local
-attachments:
-  - /Users/you/.mem/attachments/20260511T143022-diagram.png
-
-# paperless-ngx (future)
-attachments:
-  - paperless://1234
-```
-
-mem-cli never reads the attachment content — it only stores and displays the
-reference. Opening an attachment is delegated to the appropriate tool.
+mem-cli never reads attachment content — it only stores and displays the
+reference.
 
 ---
 
-## Tag backend
+## Design decisions
 
-Tags are presented as mem-cli's own. The source is configurable.
+Decisions made, alternatives considered, and why.
 
-`~/.config/mem/config.json`:
-```json
-{
-  "tag_backend": "todoist-cli labels"
-}
+---
+
+### Frontmatter vs no frontmatter
+
+**Decision:** YAML frontmatter, tool-managed.
+
+Considered: sidecar files, trailing metadata block, inline-only with no
+structured metadata. All trade one problem for another — sidecar files break
+portability, trailing blocks aren't standard, inline-only loses per-file
+self-containment (P3). Frontmatter is the established convention for structured
+metadata on plain text files. Every serious plain-text tool speaks it (Obsidian,
+Hugo, Pandoc). Grep-friendly, durable, parseable in isolation without the index.
+
+The sandwich pattern (strip before edit, restore after) is the deliberate
+consequence: the tool manages structured data so the human never has to.
+
+---
+
+### Inline notation: merge-up vs derive-down
+
+**Decision:** merge-up. Frontmatter is the authority; inline `#tags` and `@from`
+in the body are a writing shortcut that flows up into frontmatter at finalization.
+
+Considered: derive-down — frontmatter as a pure reflection of body, body as the
+sole truth. Cleaner conceptually (one source, no duplication) but forces
+injecting flag-supplied metadata (`-l kafka`, `-f thomas-mueller`) into prose
+as `#kafka` or `@thomas-mueller`. That contaminates natural writing with
+machine-placed tokens.
+
+Merge-up accepts visible redundancy (a tag written inline also appears in
+frontmatter) in exchange for clean prose. Flags feed frontmatter directly
+without touching the body. Frontmatter is the union of all sources: inline
+extraction, CLI flags, and metadata preserved across prior edits.
+
+---
+
+### `from` field: list vs singular
+
+**Decision:** list — `from: [kate, thomas-mueller]`.
+
+Considered: singular `source: kate` enforced by P6 (atomic). But atomicity
+applies to the idea, not the attribution. A single piece of information can
+genuinely emerge from a meeting with multiple participants. Singular would
+require splitting notes that shouldn't be split.
+
+---
+
+### `from` is entities only — URLs go inline
+
+**Decision:** `from` holds slugs (people, teams, groups). URLs are not stored
+in `from`; they go inline in the body as markdown links.
+
+Rationale: a URL is a reference, not attribution. Mixing slugs and URLs in one
+field makes querying harder (`mem ls --from thomas-mueller` would need to filter
+out URL strings) and blurs the semantic distinction between "who told you" and
+"where you can read more."
+
+---
+
+### Field name: `from` not `sources`
+
+**Decision:** `from`.
+
+"I heard this from X" is the natural sentence. `from` is shorter, unambiguous,
+and works equally for individuals and groups. `sources` carries a journalism
+connotation (confidential informants, citations) that doesn't fit the use case.
+Uniform with the CLI: `mem from` mirrors the field name, same as `mem tags`.
+
+---
+
+### Title is the filename slug — not repeated in body
+
+**Decision:** `20260511T143022-kafka-rebalance.md` — the slug is the title.
+No `# Heading` in the body, no `title:` frontmatter field.
+
+A heading in the body duplicates the slug and requires keeping them in sync.
+The filename is already the identity of the note. Body is content only.
+
+---
+
+### Cross-referencing: implicit + `[[wiki-links]]`
+
+**Decision:** both. Implicit association via shared `tags` and `from` (always
+free, zero syntax). Explicit `[[slug]]` links in body for intentional
+connections (extracted to `links:` frontmatter at finalization).
+
+Implicit alone misses connections the author explicitly has in mind. Explicit
+alone requires discipline and adds friction. Combined: implicit handles the
+common case, `[[slug]]` is available when the author wants to state a connection
+directly.
+
+---
+
+### `links:` re-extracted fresh on every save
+
+**Decision:** `[[slug]]` mentions are re-extracted from the body on every
+finalization, same as `#tags` and `@from`. The body is the truth for links.
+
+A link removed from the body disappears from `links:` on next save. A link
+added inline appears in `links:` immediately. No manual frontmatter editing
+needed or expected. Unresolved links (slugs that don't exist yet) are stored
+silently — P7, the linked note may not exist yet.
+
+---
+
+### Frontmatter fields omitted when empty
+
+**Decision:** all frontmatter fields (`tags`, `from`, `links`, `attachments`)
+are omitted when empty. A note with no tags has no `tags:` line.
+
+Considered: always writing `tags: []` as an explicit signal the note has been
+processed. Rejected — the sandwich pattern guarantees finalization runs on every
+save, so an empty list carries no useful information. Omitting empty fields
+keeps frontmatter quiet and consistent across all fields.
+
+---
+
+### Slug collision on `mem new` errors and aborts
+
+**Decision:** error with a helpful message, do not open the existing note or
+append a disambiguator.
+
+```
+mem new kafka-rebalance
+Error: note "kafka-rebalance" already exists — use: mem edit kafka-rebalance
 ```
 
-mem-cli shells out to the configured command and parses `id\tname` output.
-Default: `todoist-cli labels`. Any command producing that format works.
-If the backend is unavailable, mem-cli falls back to tags found in existing notes.
+Considered: silently opening the existing note (surprising — user said `new`,
+not `edit`), appending `-2` (violates P4 — one slug per concept). If two things
+are different enough to need separate notes, they need distinct names. The error
+forces the human to be intentional. This is already the current behavior.
 
-Tab completion for `-l/--label` calls the backend at completion time.
+---
+
+### Inbox and drafts are the same concept
+
+**Decision:** no separate inbox directory. `mem new` with no title is the
+inbox. Unnamed notes (timestamp-only filenames) are the inbox.
+
+Considered: a separate `~/.mem/inbox/` with `mem inbox` subcommands. Rejected
+— two storage locations means `mem search` and ripgrep must scan both, notes
+can be in either place, and the human has to remember where to look. The
+distinction adds complexity without adding value.
+
+`mem new` with no title opens the editor immediately — zero-friction capture.
+The human dumps the thought and closes. The note sits in `notes/` as a
+timestamp-only file until promoted via `mem rename`.
+
+`mem ls --unnamed` provides the focused review view: all timestamp-only notes
+that still need a title, sorted oldest first as a processing queue.
+
+The inbox as a mental model stays. The inbox as a directory does not exist.
+
+---
+
+### Draft notes use timestamp-only filenames
+
+**Decision:** `mem new` with no title creates `20260519T143022.md` — no slug
+suffix. Promotion to a named note is done via `mem rename`.
+
+Considered: `draft` as a slug suffix (`20260519T143022-draft.md`). Rejected —
+`draft` is a fake name that encodes state rather than identity. Timestamp-only
+is more honest: the note simply has no name yet. Collision-free by construction
+(two drafts in the same second errors).
+
+`mem ls` shows untitled entries by timestamp. `mem rename 20260519T143022
+kafka-session-timeout` gives it a permanent slug. No special prompting in
+`mem edit` — rename is explicit and deliberate.
+
+Implementation note: `parseFilename` must handle the no-slug case (no hyphen
+after the timestamp).
+
+---
+
+### Renaming notes: `mem rename` vs `mem mv`
+
+**Decision:** two distinct commands with different scopes.
+
+`mem rename <old> <new>` — renames the filename slug only, rebuilds index.
+Does not touch other notes. Warns if references exist, does not block:
+```
+Warning: 3 notes reference @kafka-rebalance — references not updated.
+Renamed → kafka-consumer-rebalance
+```
+
+`mem mv <old> <new>` — renames AND rewrites all `@slug` and `[[slug]]`
+occurrences across every note. Requires explicit confirmation before writing:
+```
+Will update 3 notes:
+  20260512T093011-kafka-session-timeout-default.md  (@kafka-rebalance)
+  20260514T110432-partition-strategy.md             ([[kafka-rebalance]])
+  20260517T084201-thomas-mueller-tips.md            (@kafka-rebalance)
+
+Proceed? [y/N]
+```
+
+Rationale: `mem rename` respects P3 — no note is silently mutated because
+another changed. A broken reference is harmless (no completions, no scoring).
+`mem mv` is opt-in for intentional restructuring, confirmation required because
+it modifies many files at once.
+
+---
+
+### Profile notes use `#profile` tag
+
+**Decision:** `#profile` marks a note that documents what a `@slug` refers to.
+
+Considered: `#contact` (implies a person), `#about` (reads oddly as a tag),
+`#entity` (too technical). `#profile` is neutral — works for individuals,
+groups, and teams without implying a relationship type. `mem ls -t profile`
+lists all profile notes.
+
+The tag is a convention, not enforced. Any note tagged `#profile` is treated
+as a profile by tooling and by the user's own mental model.
+
+---
+
+### `mem related` scoring
+
+**Decision:** weighted scoring, threshold ≥ 2 pts.
+
+```
+[[explicit link]]       10 pts   intentional — author stated the connection
+shared from value        3 pts   strong signal — same origin
+shared tag               1 pt    weaker signal — same topic
+```
+
+Notes sorted descending by total score. Notes scoring < 2 suppressed.
+
+Asymmetry reflects signal strength: two notes sharing `@thomas-mueller` are
+more meaningfully connected than two notes sharing `#backend` (likely 40+
+notes). A single shared common tag is not a useful result at scale. An explicit
+link always surfaces regardless of metadata overlap.
+
+Backlinks are free: a note containing `[[kafka-rebalance]]` in its `links:`
+field appears in `mem related kafka-rebalance` results as an explicit link,
+without any annotation needed on `kafka-rebalance` itself.
 
 ---
 
