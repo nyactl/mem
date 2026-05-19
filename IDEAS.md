@@ -24,3 +24,8 @@ Q7: `mem related` scoring [done — see Design Decisions in DESIGN.md]
 
 Q8: `tags: []` always written vs omit when empty [done — omit when empty, see Design Decisions in DESIGN.md]
 
+Q9: mem index command [done — manual index rebuild + --embeddings flag, see DESIGN.md]
+Q10: mem search output format [done — slug + matching line with context, see DESIGN.md]
+Q11: mem serve form behavior [done — empty title → unnamed note, inline confirmation, see DESIGN.md]
+Q12: nvim integration [done — documented in Tags section of DESIGN.md]
+
