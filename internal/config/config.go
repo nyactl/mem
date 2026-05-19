@@ -7,7 +7,6 @@ import (
 )
 
 type Config struct {
-	TagBackend        string `json:"tag_backend"`
 	AttachmentBackend string `json:"attachment_backend"`
 	NotesDir          string `json:"notes_dir"`
 	AttachmentsDir    string `json:"attachments_dir"`
@@ -21,9 +20,6 @@ func Load() Config {
 		return cfg
 	}
 	_ = json.Unmarshal(data, &cfg)
-	if cfg.TagBackend == "" {
-		cfg.TagBackend = defaults().TagBackend
-	}
 	if cfg.NotesDir == "" {
 		cfg.NotesDir = defaults().NotesDir
 	}
@@ -36,7 +32,6 @@ func Load() Config {
 func defaults() Config {
 	home, _ := os.UserHomeDir()
 	return Config{
-		TagBackend:        "todoist-cli labels",
 		AttachmentBackend: "local",
 		NotesDir:          filepath.Join(home, ".mem", "notes"),
 		AttachmentsDir:    filepath.Join(home, ".mem", "attachments"),
