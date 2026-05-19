@@ -55,5 +55,6 @@ func init() {
 	newCmd.Flags().StringVarP(&newSource, "source", "s", "", "source: person name or URL")
 	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")
 	newCmd.RegisterFlagCompletionFunc("label", tagCompleter)
+	newCmd.RegisterFlagCompletionFunc("source", sourceCompleter)
 	root.AddCommand(newCmd)
 }
