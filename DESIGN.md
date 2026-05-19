@@ -92,9 +92,17 @@ existing spellings; the format constraint prevents divergence.
 **Shell completion:** `-l/--label` flag reads from the index via `mem tags`.
 
 **Editor completion (nvim):** nvim reads `~/.mem/notes/.mem-index.json`
-directly. The index has `tags[]`, `from[]`, and `links[]`. A small Lua snippet in nvim
-config offers completions on `#` trigger (tags) and `@` trigger (people).
-No new mem commands are needed — the store is the interface (P2, P8).
+directly. The index has `tags[]`, `from[]`, and `links[]`. A Lua snippet in
+nvim config (~20 lines) provides:
+
+- `#` trigger → completes from `tags[]`
+- `@` trigger → completes from `from[]`
+- `[[` trigger → completes from note slugs (derived from filenames)
+
+Reads the index lazily — only when triggered, not on every keystroke. Uses
+`omnifunc` or a `nvim-cmp` custom source. No new mem commands needed — the
+index is the interface (P2, P8). The Lua snippet lives in nvim config, not
+in mem-cli.
 
 ---
 
@@ -163,9 +171,32 @@ Browse notes interactively via fzf.
 
 Full-text search via ripgrep across `~/.mem/notes/`.
 
+Output: slug + matching line with context, one result per match:
+```
+kafka-rebalance
+  Consumer group rebalance blocks all partitions for ~2min
+
+kafka-session-timeout-default
+  @thomas-mueller confirmed session timeout defaults to 3s
+```
+
+Slug derived from filename, body only shown (frontmatter excluded from search).
+Multiple matches in one note appear as separate lines under the same slug.
+
 ### `mem tags`
 
 List all tags with note counts. Output: `<tag>\t<count>`
+
+### `mem index [--embeddings]`
+
+Manually rebuild the index cache.
+
+- Plain `mem index` — rebuilds `~/.mem/notes/.mem-index.json` from scratch
+- `--embeddings` — additionally regenerates vectors for notes whose mtime is
+  newer than their last-embedded timestamp in `~/.mem/notes/.mem-vectors.db`
+- Needed after external edits (AI writes, direct file edits outside mem-cli)
+- Automatic rebuild happens after every mem write command; this is the manual
+  escape hatch
 
 ### `mem from`
 
@@ -197,7 +228,11 @@ Start a local HTTP capture server.
 - Default port: `4444`
 - Binds to `127.0.0.1` by default — `--lan` to expose on the local network
 - Single-page form: body textarea, optional title, optional tag/from fields
-- On submit: creates a timestamp-only note, runs FinalizeNote, rebuilds index
+- Empty title field → timestamp-only note (mirrors `mem new` with no title)
+- Filled title field → slugified filename
+- On submit: creates note, runs FinalizeNote, rebuilds index
+- Post-submit: inline confirmation showing created slug, form cleared for next
+  capture — no page reload
 - Foreground process — Ctrl-C to stop. No daemon, no background mode.
 - Capture only — no editing, no browsing. Those stay CLI.
 
