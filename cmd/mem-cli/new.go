@@ -14,12 +14,13 @@ import (
 )
 
 var newLabels []string
+var newSource string
 var newFiles []string
 
 var newCmd = &cobra.Command{
 	Use:   "new <title>",
-	Short: "Create a new ref note",
-	Long:  `Title words can be quoted or unquoted: ref new kafka rebalance blocks partitions`,
+	Short: "Create a new mem note",
+	Long:  `Title words can be quoted or unquoted: mem new kafka rebalance blocks partitions`,
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
@@ -41,7 +42,7 @@ var newCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "attached → %s\n", dst)
 		}
 
-		path, err := note.Create(cfg.NotesDir, ts, slug, newLabels, attachmentPaths)
+		path, err := note.Create(cfg.NotesDir, ts, slug, newLabels, newSource, attachmentPaths)
 		if err != nil {
 			return err
 		}
@@ -51,6 +52,7 @@ var newCmd = &cobra.Command{
 
 func init() {
 	newCmd.Flags().StringArrayVarP(&newLabels, "label", "l", nil, "tag, repeatable: -l kafka -l backend")
+	newCmd.Flags().StringVarP(&newSource, "source", "s", "", "source: person name or URL")
 	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")
 	newCmd.RegisterFlagCompletionFunc("label", tagCompleter)
 	root.AddCommand(newCmd)

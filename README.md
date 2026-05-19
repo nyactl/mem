@@ -41,6 +41,7 @@ Timestamp is the sole source of creation time — not repeated in frontmatter.
 ```markdown
 ---
 tags: [kafka, rebalance]
+source: kate
 attachments: [/Users/you/.mem/attachments/20260511T143022-diagram.png]
 ---
 
@@ -49,6 +50,7 @@ protocol. Fix: switch to cooperative-sticky assignor.
 ```
 
 - `tags` — always present, may be empty `[]`
+- `source` — omitted if none; person name or URL
 - `attachments` — omitted if none
 - Nothing else — no `created`, no `updated`, no `title`
 
@@ -61,6 +63,7 @@ protocol. Fix: switch to cooperative-sticky assignor.
 Create a new note. Opens `$EDITOR` after creation.
 
 - `-l/--label <tag>` — repeatable, tab-completes from tag backend
+- `-s/--source <value>` — person name or URL
 - `-f/--file <path>` — repeatable; copies file into `~/.mem/attachments/`
 
 ### `mem get [<slug>]`
