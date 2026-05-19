@@ -18,6 +18,7 @@ type Note struct {
 	Slug        string
 	Created     time.Time
 	Tags        []string
+	Source      string
 	Attachments []string
 	Body        string
 }
@@ -41,7 +42,7 @@ func Filename(ts time.Time, slug string) string {
 }
 
 // Create writes a new note file with frontmatter and returns its path.
-func Create(dir string, ts time.Time, slug string, tags []string, attachments []string) (string, error) {
+func Create(dir string, ts time.Time, slug string, tags []string, source string, attachments []string) (string, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create notes dir: %w", err)
 	}
@@ -49,7 +50,7 @@ func Create(dir string, ts time.Time, slug string, tags []string, attachments []
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("note %q already exists — use: mem edit %s", slug, slug)
 	}
-	content := buildFrontmatter(tags, attachments) + "\n"
+	content := buildFrontmatter(tags, source, attachments) + "\n"
 	return path, os.WriteFile(path, []byte(content), 0600)
 }
 
@@ -63,12 +64,13 @@ func Parse(path string) (Note, error) {
 	if err != nil {
 		return Note{}, err
 	}
-	tags, attachments, body := parseFrontmatter(string(data))
+	tags, source, attachments, body := parseFrontmatter(string(data))
 	return Note{
 		Path:        path,
 		Slug:        slug,
 		Created:     ts,
 		Tags:        tags,
+		Source:      source,
 		Attachments: attachments,
 		Body:        body,
 	}, nil
@@ -121,9 +123,9 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	if err != nil {
 		return err
 	}
-	tags, existing, body := parseFrontmatter(string(data))
+	tags, source, existing, body := parseFrontmatter(string(data))
 	merged := append(existing, newAttachments...)
-	content := buildFrontmatter(tags, merged) + body + "\n"
+	content := buildFrontmatter(tags, source, merged) + body + "\n"
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
@@ -154,13 +156,16 @@ func parseFilename(base string) (time.Time, string, error) {
 	return ts, base[16:], nil
 }
 
-func buildFrontmatter(tags []string, attachments []string) string {
+func buildFrontmatter(tags []string, source string, attachments []string) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
 	if len(tags) > 0 {
 		sb.WriteString("tags: [" + strings.Join(tags, ", ") + "]\n")
 	} else {
 		sb.WriteString("tags: []\n")
+	}
+	if source != "" {
+		sb.WriteString("source: " + source + "\n")
 	}
 	if len(attachments) > 0 {
 		sb.WriteString("attachments: [" + strings.Join(attachments, ", ") + "]\n")
@@ -169,7 +174,7 @@ func buildFrontmatter(tags []string, attachments []string) string {
 	return sb.String()
 }
 
-func parseFrontmatter(content string) (tags []string, attachments []string, body string) {
+func parseFrontmatter(content string) (tags []string, source string, attachments []string, body string) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	inFM, first, afterFM := false, true, false
 	var bodyLines []string
@@ -194,6 +199,8 @@ func parseFrontmatter(content string) (tags []string, attachments []string, body
 		if inFM {
 			if strings.HasPrefix(line, "tags:") {
 				tags = parseInlineList(line)
+			} else if strings.HasPrefix(line, "source:") {
+				source = strings.TrimSpace(strings.TrimPrefix(line, "source:"))
 			} else if strings.HasPrefix(line, "attachments:") {
 				attachments = parseInlineList(line)
 			}
