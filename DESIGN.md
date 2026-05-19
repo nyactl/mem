@@ -151,7 +151,8 @@ Open a note in `$EDITOR`.
 - Identifier is a slug (`kafka-rebalance`) or bare timestamp (`20260519T143022`)
 - Bare timestamp addresses unnamed notes directly
 - Frontmatter stripped before editor opens, restored after (sandwich pattern)
-- Tab-completes slugs and bare timestamps of unnamed notes
+- Tab-completes slugs and bare timestamps of unnamed notes — timestamps shown
+  with first non-empty body line as context: `20260519T143022  thomas said kafka…`
 
 ### `mem get [<identifier>]`
 
@@ -161,7 +162,8 @@ View a note.
 - Identifier is a slug or bare timestamp
 - Displays body only — frontmatter stripped, consistent with what the human writes
 - Opens in bat (pager mode); falls back to less, then cat
-- Tab-completes slugs and bare timestamps of unnamed notes
+- Tab-completes slugs and bare timestamps of unnamed notes — timestamps shown
+  with first non-empty body line as context: `20260519T143022  thomas said kafka…`
 
 `mem get` and `mem edit` share one picker implementation. The action on
 selection is the only difference — view vs edit. Same list, same preview pane,
@@ -230,10 +232,14 @@ slug but does not update them.
 - Identifier is a slug or bare timestamp — bare timestamp addresses unnamed notes
 - New title is slugified automatically: `Kafka Session Timeout` → `kafka-session-timeout`
 
-### `mem mv <old-slug> <new-slug>`
+### `mem mv <old-identifier> <new-title> [--yes]`
 
 Rename a note's slug AND rewrite all `@slug` and `[[slug]]` references across
 every note. Shows a confirmation prompt listing affected files before writing.
+
+- `--yes/-y` — skip confirmation, for scripting and non-interactive use
+- When stdout is not a TTY and `--yes` is not passed: print affected files to
+  stderr and exit `2` — never hang waiting for input
 
 ### `mem attach <identifier> <file>`
 
@@ -254,7 +260,9 @@ Start a local HTTP capture server.
   Intended for `--lan`: bookmark `http://192.168.1.x:4444/?token=abc123` on
   your phone. No sessions, no OAuth — shared secret is sufficient for a
   trusted local network. Requests without a valid token return 403.
-- Single-page form: body textarea, optional title, optional tag/from fields
+- Single-page form: body textarea and optional title field only — no separate
+  tag/from fields. Write `#tag` and `@slug` inline in the body, same as the
+  editor. Consistent with the writing model, simpler UI.
 - Empty title field → timestamp-only note (mirrors `mem new` with no title)
 - Filled title field → slugified filename
 - On submit: creates note, runs FinalizeNote, rebuilds index
@@ -509,6 +517,31 @@ Considered: always writing `tags: []` as an explicit signal the note has been
 processed. Rejected — the sandwich pattern guarantees finalization runs on every
 save, so an empty list carries no useful information. Omitting empty fields
 keeps frontmatter quiet and consistent across all fields.
+
+---
+
+### Index staleness uses mtime, not content hash
+
+**Decision:** the index cache is considered stale when the notes directory mtime
+is newer than the index file mtime. No content hashing.
+
+A content hash would require reading every note file on every command — defeats
+the purpose of the cache. The edge case where mtime is preserved on an in-place
+edit (e.g. `cp --preserve`, deliberate mtime manipulation) is rare and
+tool-specific. `mem index` is the documented escape hatch for when the cache
+is wrong. Trust mtime; don't over-engineer staleness detection.
+
+---
+
+### `mem serve` form uses inline notation only
+
+**Decision:** the capture form has a body textarea and an optional title field.
+No separate tag or from input fields. Users write `#tag` and `@slug` inline in
+the body, consistent with the editor writing model.
+
+Separate fields would duplicate the inline notation and require maintaining two
+input paths through FinalizeNote. Inline-only keeps the form minimal and the
+mental model consistent.
 
 ---
 
