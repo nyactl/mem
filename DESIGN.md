@@ -151,7 +151,7 @@ completion same as tags via index.json.
 
 ## Commands
 
-### `mem new [<title>] [-l <tag>] [-f <person>] [--file <path>]`
+### `mem new [<title>] [-l <tag>] [-f <person>]`
 
 Create a new note.
 
@@ -159,7 +159,6 @@ Create a new note.
 - No title → timestamp-only file (`20260519T143022.md`), rename later with `mem rename`
 - `-l/--label <tag>` — repeatable, tab-completes from index
 - `-f/--from <slug>` — repeatable, tab-completes from index
-- `--file <path>` — repeatable, no short flag; copies file to attachments dir
 - Writes body only to a temp file (`/tmp/mem-new-<uuid>.md`), opens `$EDITOR` on it
 - Note file is not created until the editor closes successfully
 - After editor closes (exit 0): runs `FinalizeNote` on temp content + flags,
@@ -693,6 +692,20 @@ timestamp-only file until promoted via `mem rename`.
 that still need a title, sorted oldest first as a processing queue.
 
 The inbox as a mental model stays. The inbox as a directory does not exist.
+
+---
+
+### `mem new` has no `--file` flag
+
+**Decision:** file attachment is only possible via `mem attach` on an existing
+note. `mem new` has no `--file` flag.
+
+A `--file` flag on `mem new` creates an ordering problem: if the file is copied
+before the editor opens and the user cancels, the attachment is orphaned in
+`~/.mem/attachments/` with no note referencing it. If copied after, the
+semantics are unclear (what if FinalizeNote fails?). Removing the flag
+eliminates the problem entirely. Note creation and file attachment are separate
+concerns — capture the thought first, attach the file after (P1, P6).
 
 ---
 
