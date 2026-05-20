@@ -85,8 +85,10 @@ remains is prose — the only text where inline notation is meaningful.
 **UUID resolution** — after extraction, `FinalizeNote` resolves each slug to a
 UUID via the registry:
 - Found → use the existing UUID
-- Not found → mint a new 8-char hex UUID, add it to the registry under the
-  appropriate namespace (`tags`, `from`, or `notes`)
+- Not found → mint a new 8-char hex UUID; check it against all existing UUIDs
+  in the registry across all namespaces before writing — if it collides, mint
+  again (retry until unique). Add to the registry under the appropriate
+  namespace (`tags`, `from`, or `notes`).
 
 Frontmatter is then written with UUIDs. If a slug that appeared in the previous
 frontmatter no longer appears in prose or flags, its UUID is dropped from this
