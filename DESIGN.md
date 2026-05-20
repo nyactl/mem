@@ -261,30 +261,36 @@ Symmetric with `mem tags`. Used by nvim integration and shell completion.
 
 ### `mem rename [--tag | --from] <old> <new-title>`
 
-Rename a note, tag, or from-entity. All three cases follow the same pattern:
-update the registry, then optionally rewrite prose.
+Rename a note, tag, or from-entity. Always updates both the registry and all
+prose references — no partial rename is offered.
+
+Shows affected files before writing, then prompts for confirmation:
+
+```
+mem rename --tag kafka kafka-streams
+
+Will rewrite #kafka in 12 notes:
+  20260512T093011-kafka-session-timeout.md
+  20260514T110432-partition-strategy.md
+  ...
+
+Proceed? [y/N]
+```
+
+If no prose references exist, no prompt — renames immediately.
 
 **Note rename** (no flag):
 - `<old>` is a slug or bare timestamp
 - New title slugified automatically: `Kafka Session Timeout` → `kafka-session-timeout`
-- Updates registry: UUID for this note now maps to the new slug
-- Renames the file
-- Reports notes with prose references to the old slug (`@old-slug`, `[[old-slug]]`)
-- Prompts: `3 notes reference old-slug in prose. Update? [y/N]`
-  - `y` → rewrites prose across all referencing notes
-  - `n` → prose goes cosmetically stale; frontmatter UUID links stay correct
+- Updates registry, renames file, rewrites `@old-slug` and `[[old-slug]]` in prose
 
 **Tag rename** (`--tag`):
-- Updates registry: UUID for this tag now maps to the new slug
-- `mem ls --tag new-slug` immediately returns all previously-tagged notes
-- Reports notes with `#old-slug` in prose, prompts to rewrite
+- Updates registry, rewrites `#old-slug` in prose across all notes
 
 **From rename** (`--from`):
-- Updates registry: UUID for this entity now maps to the new slug
-- `mem ls --from new-slug` immediately returns all notes
-- Reports notes with `@old-slug` in prose, prompts to rewrite
+- Updates registry, rewrites `@old-slug` in prose across all notes
 
-`--yes/-y` skips the prompt for all three. Non-TTY without `--yes` exits `2`.
+`--yes/-y` skips the confirmation prompt. Non-TTY without `--yes` exits `2`.
 Rebuilds index after completion.
 
 ### `mem attach <identifier> <file>`
@@ -748,15 +754,17 @@ This resolves F4 (no crash recovery) and F5 (non-atomic write) together.
 
 ---
 
-### Renaming: one command, three namespaces
+### Renaming: one command, always complete
 
-**Decision:** `mem rename` is the single rename command. `mem mv` is removed.
+**Decision:** `mem rename` always updates both the registry and all prose
+references. No partial rename is offered. `mem mv` is removed.
 
-The UUID design makes rename safe by default: the registry update is
-instantaneous and correct. Prose rewrite is optional and always confirmed.
-A separate `mem mv` command was only needed when rename was dangerous (would
-leave stale references without recourse). With UUIDs, stale prose is cosmetic,
-not a data integrity issue — there is no longer a reason for two commands.
+Considered: offering a choice — update registry only (instant) vs update
+registry + prose (rewrites files). Rejected because a declined prose rewrite
+creates silent divergence: the next save of any note containing the old slug
+in prose mints a new UUID for that slug, splitting the collection. There is no
+safe "registry only" path. The confirmation prompt shows scope (which files
+will be rewritten) but the outcome is always complete.
 
 ---
 
