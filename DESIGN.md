@@ -341,15 +341,20 @@ Semantic search using local embeddings.
 ```json
 {
   "dir_mtime": 1234567890,
+  "total_notes": 847,
   "tags": ["kafka", "kubernetes", "music"],
+  "tag_counts": {"kafka": 34, "kubernetes": 12, "music": 3},
   "from": ["kate", "thomas-mueller"],
+  "from_counts": {"kate": 41, "thomas-mueller": 18},
   "links": ["kafka-rebalance", "partition-strategy"]
 }
 ```
 
-Stores slugs (resolved from registry) for shell and editor completion. Rebuilt
-after every write (`mem new`, `mem edit`, `mem attach`). On read, dir mtime is
-checked — if stale, index is rebuilt before returning.
+Stores slugs (resolved from registry) for shell and editor completion.
+`total_notes`, `tag_counts`, and `from_counts` are used by `mem related` to
+compute IDF weights. Rebuilt after every write (`mem new`, `mem edit`,
+`mem attach`). On read, dir mtime is checked — if stale, index is rebuilt
+before returning.
 
 ---
 
@@ -769,22 +774,54 @@ as a profile by tooling and by the user's own mental model.
 
 ---
 
+### Plain files, not a database
+
+**Decision:** notes are plain `.md` files. Metadata lives in frontmatter.
+The index and registry are derived JSON files. No SQLite, no embedded DB for
+the primary store.
+
+At realistic personal scale (5k–20k notes, 3–5 captures/day over many years),
+flat files with ripgrep are fast enough for every operation. The more important
+reason is P2: an AI agent can read notes with nothing but filesystem access —
+no mem-cli process, no DB connection, no schema. Moving metadata into a DB
+would make mem-cli a required intermediary and break that guarantee.
+
+The scalability problems that arise at large scale are solvable within the
+flat-file model: IDF weighting for `mem related` (this file), pre-filtered
+`mem ls`, year-based subdirectory sharding as opt-in config. A DB adds
+operational complexity and a dependency that the tool's core value proposition
+explicitly avoids.
+
+The vector store (`.mem-vectors.db`) is the deliberate exception: embeddings
+are binary blobs that have no plain-text representation, and SQLite is the
+right tool for nearest-neighbor queries. It is opt-in and affects only
+`mem similar`.
+
+---
+
 ### `mem related` scoring
 
-**Decision:** weighted scoring, threshold ≥ 2 pts.
+**Decision:** weighted scoring with IDF for tags, threshold ≥ 2 pts.
 
 ```
-[[explicit link]]       10 pts   intentional — author stated the connection
-shared from value        3 pts   strong signal — same origin
-shared tag               1 pt    weaker signal — same topic
+[[explicit link]]       10 pts      intentional — author stated the connection
+shared from value        3 pts      strong signal — same origin
+shared tag               IDF(tag)   scales with tag rarity
 ```
+
+IDF per tag: `log(total_notes / notes_containing_tag)`
+
+A tag on 3 of 1000 notes scores `log(333)` ≈ 5.8 — stronger than a shared
+`from` value. A tag on 200 of 1000 notes scores `log(5)` ≈ 1.6. A tag on 900
+of 1000 notes scores `log(1.1)` ≈ 0.1 — noise, effectively filtered by the
+threshold. `total_notes` and `tag_counts` are read from the index cache; no
+per-query file scanning needed.
 
 Notes sorted descending by total score. Notes scoring < 2 suppressed.
 
-Asymmetry reflects signal strength: two notes sharing `@thomas-mueller` are
-more meaningfully connected than two notes sharing `#backend` (likely 40+
-notes). A single shared common tag is not a useful result at scale. An explicit
-link always surfaces regardless of metadata overlap.
+Explicit links always surface regardless of metadata overlap. Rare tags
+surface genuinely related notes. Common tags contribute proportionally less
+as the collection grows — results stay meaningful at scale.
 
 Backlinks are free: a note containing `[[kafka-rebalance]]` in its `links:`
 field appears in `mem related kafka-rebalance` results as an explicit link,
