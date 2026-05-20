@@ -22,11 +22,12 @@ F2: from slug drift for real names [resolved]
   steered by completion; fast captures that bypass completion produce new
   UUIDs, which mem rename can merge.
 
-F3: mem related scoring degrades at scale
-  Common tags (#backend, #kafka) appear on 100+ notes.
-  1pt-per-shared-tag has no frequency weighting.
-  A note sharing three common tags scores 3pts alongside genuinely related notes.
-  No TF-IDF equivalent. Results become noisy beyond ~500 notes.
+F3: mem related scoring degrades at scale [resolved]
+  Resolved by IDF weighting. Tag score is now log(total_notes/notes_with_tag)
+  instead of a flat 1pt. Common tags contribute near-zero; rare tags contribute
+  more than a shared from-value. tag_counts and total_notes are stored in the
+  index cache — no per-query file scanning. Results stay meaningful as the
+  collection grows.
 
 F4: sandwich pattern has no crash recovery [resolved]
   Resolved by temp-file editing. The editor opens a body-only temp file in
