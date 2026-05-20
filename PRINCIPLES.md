@@ -1,3 +1,7 @@
+P0 - Best in Class note taking
+I want to achieve the best in class cli compatible note taking tool here.
+Consider principles below as suggestions if a design choice clearly drives towards this P0.
+
 P1 — Capture-first
 Nothing should block the editor from opening. Title, tags, and source can all
 emerge during or after writing — inline while thinking, or added later. The tool
@@ -10,9 +14,12 @@ required. A note written by a human is immediately available to AI, and
 vice versa.
 
 P3 — Self-contained
-Notes are the single source of truth. Tags, sources, and slugs are derived from
-the notes themselves — no external backends, registries, or services required.
-The local index is a performance cache derived from notes, never the authority.
+The prose body of a note is self-contained for humans — it is what you write
+and read, and remains meaningful with any text tool. Frontmatter is
+machine-managed and not expected to be human-readable in isolation. The local
+index and registry are derived caches; no external services are required.
+Notes are the source of truth for prose; the registry is the source of truth
+for stable identity.
 
 P4 — Unified notation
 One concept, one spelling. Tags, sources, and slugs all use the same format
