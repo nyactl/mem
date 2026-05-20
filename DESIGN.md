@@ -29,8 +29,10 @@ of creation time.
 
 ```markdown
 ---
-tags: [kafka, rebalance]
-from: [kate, thomas-mueller]
+id: a3f2b1c4
+tags: [b1c2d3e4, c2d3e4f5]
+from: [f5a6b7c8]
+links: [d3e4f5a6]
 attachments: [/Users/you/.mem/attachments/20260511T143022-diagram.png]
 ---
 
@@ -38,12 +40,19 @@ Consumer group rebalance blocks all partitions for ~2min with the default eager
 protocol. Fix: switch to cooperative-sticky assignor. Confirmed by @kate.
 ```
 
-- `tags` — omitted if none
-- `from` — omitted if none; list of person slugs (who told you)
+- `id` — 8-char hex UUID, assigned at creation, never changes
+- `tags` — omitted if none; list of tag UUIDs (registry maps UUID → slug)
+- `from` — omitted if none; list of entity UUIDs (registry maps UUID → slug)
+- `links` — omitted if none; list of note UUIDs for `[[wiki-links]]` in prose
 - `attachments` — omitted if none; absolute paths
 - Nothing else — no `created`, no `updated`, no `title`
 
-`from` is people only — slugs that map to `@` inline mentions. URLs belong
+The prose body always uses human-readable slugs — `@kate`, `[[kafka-session-timeout]]`,
+`#kafka`. Frontmatter stores UUIDs. `FinalizeNote` resolves slugs to UUIDs via
+the registry on every save. Renaming a tag, person, or note slug updates the
+registry; frontmatter is immediately consistent without touching any note file.
+
+`from` is entities only — slugs that map to `@` inline mentions. URLs belong
 inline in the body as markdown links, not in `from`.
 
 **The human only writes the body.** Frontmatter is stripped before the editor
@@ -72,6 +81,17 @@ All are optional. A note with no tags, no attribution, and no links is valid.
 
 Stripping order matters: code blocks first, then inline code, then URLs. What
 remains is prose — the only text where inline notation is meaningful.
+
+**UUID resolution** — after extraction, `FinalizeNote` resolves each slug to a
+UUID via the registry:
+- Found → use the existing UUID
+- Not found → mint a new 8-char hex UUID, add it to the registry under the
+  appropriate namespace (`tags`, `from`, or `notes`)
+
+Frontmatter is then written with UUIDs. If a slug that appeared in the previous
+frontmatter no longer appears in prose or flags, its UUID is dropped from this
+note's frontmatter. The UUID remains in the registry (other notes may still
+reference it).
 
 ---
 
@@ -187,7 +207,13 @@ Browse notes interactively via fzf.
 
 ### `mem search <query>`
 
-Full-text search via ripgrep across `~/.mem/notes/`, including frontmatter.
+Full-text search across `~/.mem/notes/`.
+
+Searches prose and frontmatter. Because frontmatter stores UUIDs, `mem search`
+resolves the query against the registry first: if the query matches a known
+slug, the corresponding UUID is also searched in frontmatter. This ensures
+`mem search thomas-mueller` finds notes where he appears only in a `from:` UUID
+and not in prose.
 
 Output: slug + matching line with context, one result per match:
 ```
@@ -195,13 +221,11 @@ kafka-rebalance
   Consumer group rebalance blocks all partitions for ~2min
 
 kafka-session-timeout-default
-  from: [thomas-mueller]
   @thomas-mueller confirmed session timeout defaults to 3s
 ```
 
-Searching frontmatter ensures `mem search thomas-mueller` finds notes where he
-appears only in `from:` and not in prose. Slug derived from filename. Multiple
-matches in one note appear as separate lines under the same slug.
+Slug derived from filename. Multiple matches in one note appear as separate
+lines under the same slug.
 
 ### `mem tags`
 
@@ -224,22 +248,33 @@ List all `from` values across notes. Output: `<slug>\t<count>`
 
 Symmetric with `mem tags`. Used by nvim integration and shell completion.
 
-### `mem rename <identifier> <new-title>`
+### `mem rename [--tag | --from] <old> <new-title>`
 
-Rename a note's slug. Rebuilds index. Warns if other notes reference the old
-slug but does not update them.
+Rename a note, tag, or from-entity. All three cases follow the same pattern:
+update the registry, then optionally rewrite prose.
 
-- Identifier is a slug or bare timestamp — bare timestamp addresses unnamed notes
-- New title is slugified automatically: `Kafka Session Timeout` → `kafka-session-timeout`
+**Note rename** (no flag):
+- `<old>` is a slug or bare timestamp
+- New title slugified automatically: `Kafka Session Timeout` → `kafka-session-timeout`
+- Updates registry: UUID for this note now maps to the new slug
+- Renames the file
+- Reports notes with prose references to the old slug (`@old-slug`, `[[old-slug]]`)
+- Prompts: `3 notes reference old-slug in prose. Update? [y/N]`
+  - `y` → rewrites prose across all referencing notes
+  - `n` → prose goes cosmetically stale; frontmatter UUID links stay correct
 
-### `mem mv <old-identifier> <new-title> [--yes]`
+**Tag rename** (`--tag`):
+- Updates registry: UUID for this tag now maps to the new slug
+- `mem ls --tag new-slug` immediately returns all previously-tagged notes
+- Reports notes with `#old-slug` in prose, prompts to rewrite
 
-Rename a note's slug AND rewrite all `@slug` and `[[slug]]` references across
-every note. Shows a confirmation prompt listing affected files before writing.
+**From rename** (`--from`):
+- Updates registry: UUID for this entity now maps to the new slug
+- `mem ls --from new-slug` immediately returns all notes
+- Reports notes with `@old-slug` in prose, prompts to rewrite
 
-- `--yes/-y` — skip confirmation, for scripting and non-interactive use
-- When stdout is not a TTY and `--yes` is not passed: print affected files to
-  stderr and exit `2` — never hang waiting for input
+`--yes/-y` skips the prompt for all three. Non-TTY without `--yes` exits `2`.
+Rebuilds index after completion.
 
 ### `mem attach <identifier> <file>`
 
@@ -301,9 +336,43 @@ Semantic search using local embeddings.
 }
 ```
 
-Rebuilt after every write (`mem new`, `mem edit`, `mem attach`). On read, dir
-mtime is checked — if stale, index is rebuilt before returning. The notes
-themselves are always the source of truth; the index is a derived cache.
+Stores slugs (resolved from registry) for shell and editor completion. Rebuilt
+after every write (`mem new`, `mem edit`, `mem attach`). On read, dir mtime is
+checked — if stale, index is rebuilt before returning.
+
+---
+
+## Registry
+
+`~/.mem/notes/.mem-registry.json`:
+
+```json
+{
+  "notes": {
+    "a3f2b1c4": "kafka-rebalance",
+    "d3e4f5a6": "kafka-session-timeout"
+  },
+  "tags": {
+    "b1c2d3e4": "kafka",
+    "c2d3e4f5": "consumer-group"
+  },
+  "from": {
+    "f5a6b7c8": "kate",
+    "e4f5a6b7": "thomas-mueller"
+  }
+}
+```
+
+Maps UUID → current slug for notes, tags, and from-entities. Maintained live by
+`FinalizeNote` (on every save) and `mem rename` (on every rename). The index
+stores the resolved slugs; the registry stores the stable identity underneath.
+
+`mem index` verifies the registry and prunes orphaned UUIDs — UUIDs no longer
+referenced by any note's frontmatter. Note UUIDs are fully reconstructible from
+filenames. Tag and from UUIDs are reconstructible by scanning `#tag` and `@slug`
+prose across all notes; flag-supplied metadata without a prose counterpart is
+re-minted with new UUIDs if the registry is lost (frontmatter links become stale
+until notes are re-saved).
 
 ---
 
@@ -624,32 +693,37 @@ after the timestamp).
 
 ---
 
-### Renaming notes: `mem rename` vs `mem mv`
+### UUID-based identity
 
-**Decision:** two distinct commands with different scopes.
+**Decision:** notes, tags, and from-entities each carry a stable UUID. Prose
+always uses human-readable slugs. Frontmatter stores UUIDs. The registry maps
+UUID → current slug.
 
-`mem rename <old> <new>` — renames the filename slug only, rebuilds index.
-Does not touch other notes. Warns if references exist, does not block:
-```
-Warning: 3 notes reference @kafka-rebalance — references not updated.
-Renamed → kafka-consumer-rebalance
-```
+Renaming `thomas-mueller` to `tom-mueller` updates one registry entry. All
+notes with `from: [uuid-of-thomas-mueller]` silently become correct — no files
+touched. Prose references (`@thomas-mueller`) are cosmetically stale until the
+user confirms a prose rewrite via `mem rename --from`.
 
-`mem mv <old> <new>` — renames AND rewrites all `@slug` and `[[slug]]`
-occurrences across every note. Requires explicit confirmation before writing:
-```
-Will update 3 notes:
-  20260512T093011-kafka-session-timeout-default.md  (@kafka-rebalance)
-  20260514T110432-partition-strategy.md             ([[kafka-rebalance]])
-  20260517T084201-thomas-mueller-tips.md            (@kafka-rebalance)
+This separates two concerns that were previously conflated: identity (UUID,
+stable) and label (slug, changeable). F1 (stale wiki-links after note rename)
+and F2 (from slug drift) are resolved by this model.
 
-Proceed? [y/N]
-```
+Considered: keeping slugs as identity (simpler, but F1/F2 persist), UUIDs
+everywhere including prose (unreadable). Middle path: UUIDs in machine-managed
+frontmatter only; prose stays human-readable and is the durable layer if
+mem-cli disappears.
 
-Rationale: `mem rename` respects P3 — no note is silently mutated because
-another changed. A broken reference is harmless (no completions, no scoring).
-`mem mv` is opt-in for intentional restructuring, confirmation required because
-it modifies many files at once.
+---
+
+### Renaming: one command, three namespaces
+
+**Decision:** `mem rename` is the single rename command. `mem mv` is removed.
+
+The UUID design makes rename safe by default: the registry update is
+instantaneous and correct. Prose rewrite is optional and always confirmed.
+A separate `mem mv` command was only needed when rename was dangerous (would
+leave stale references without recourse). With UUIDs, stale prose is cosmetic,
+not a data integrity issue — there is no longer a reason for two commands.
 
 ---
 
