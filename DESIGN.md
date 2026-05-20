@@ -208,7 +208,7 @@ Browse notes interactively via fzf.
 - `--tag/-t` — pre-filters by tag
 - `--from` — pre-filters by person
 - `--unnamed` — shows only timestamp-only notes (the inbox queue), sorted oldest first
-- Each fzf line: `<slug>\t<tags>\t<from>\t<created>` — unnamed notes show `(unnamed)` in the slug column
+- Each fzf line: `<slug>\t<created>` — unnamed notes show `(unnamed)\t<created>`
 - bat preview pane
 - Key bindings:
   - `Enter` — open selected note in `mem get` (view)
@@ -751,6 +751,20 @@ eliminates that window entirely — a crash at any point leaves the note file in
 its last valid state.
 
 This resolves F4 (no crash recovery) and F5 (non-atomic write) together.
+
+---
+
+### `mem ls` shows slug and date only
+
+**Decision:** the fzf line is `<slug>\t<created>`. No tag or from columns.
+
+Considered: displaying per-note tags and from in columns. Rejected for two
+reasons. First, it requires O(N) file reads on every invocation — one per note
+to read frontmatter. Second, the slug is already the title and carries
+sufficient identity; tag and from columns add noise more than signal in a
+picker. The cases where attribution or topic matter are exactly the cases where
+`--tag` or `--from` pre-filtering is used — the columns are redundant with the
+filters that already exist.
 
 ---
 
