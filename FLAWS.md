@@ -54,11 +54,10 @@ F7: prose/registry diverge silently after a declined rename [resolved]
   shows scope before writing; --yes skips it. No partial path exists, so
   divergence cannot occur.
 
-F8: --file attachment copied before note exists [bug]
-  mem new --file copies the file to attachments dir, but the spec does not
-  say when relative to the editor session. If copying happens before the
-  editor opens and the editor is cancelled, the attachment sits in
-  ~/.mem/attachments/ with no note referencing it.
+F8: --file attachment copied before note exists [resolved]
+  Resolved by removing --file from mem new entirely. Attachments are added
+  via mem attach after the note exists. Note creation and file attachment
+  are separate concerns — P6, P1. No orphaning is possible.
 
 F9: no mem delete
   No command removes a note. Junk captures from mem serve, accidental
