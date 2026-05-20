@@ -39,11 +39,14 @@ F5: FinalizeNote write is not atomic [resolved]
   calls os.Rename into place — atomic on the same filesystem. No partial
   writes are possible.
 
-F6: mem ls requires O(N) file reads for per-note tag/from display
-  The fzf line shows <slug>\t<tags>\t<from>\t<created> per note. The index
-  stores only the global tag/from lists — no per-note data. Every mem ls
-  invocation must read every note's frontmatter to populate the columns.
-  At 10k notes that is 10k file reads on every open.
+F6: mem ls requires O(N) file reads for per-note tag/from display [resolved]
+  Resolved by dropping the tag/from columns. mem ls fzf line is now
+  <slug>\t<created> only — a pure directory listing, no file reads. The slug
+  is the title and carries sufficient identity for browsing. Tag and from
+  context is available via --tag/--from pre-filtering and the fzf preview pane.
+  Caching per-note data in the index was rejected: the sync is free but the
+  columns add noise more than signal in a picker where the slug already
+  identifies the note.
 
 F7: prose/registry diverge silently after a declined rename [resolved]
   The option to decline prose rewrite after a registry rename was removed.
