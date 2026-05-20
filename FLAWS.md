@@ -28,12 +28,12 @@ F3: mem related scoring degrades at scale
   A note sharing three common tags scores 3pts alongside genuinely related notes.
   No TF-IDF equivalent. Results become noisy beyond ~500 notes.
 
-F4: sandwich pattern has no crash recovery [bug]
-  If $EDITOR crashes, frontmatter has been stripped but never restored.
-  Note left with body only — tags, from, links silently lost.
-  No recovery path specified.
+F4: sandwich pattern has no crash recovery [resolved]
+  Resolved by temp-file editing. The editor opens a body-only temp file in
+  /tmp; the note file is never modified until FinalizeNote is ready to write
+  the complete result. A crash at any point leaves the note file untouched.
 
-F5: FinalizeNote write is not atomic [bug]
-  os.WriteFile writes directly to the file.
-  Process killed mid-write leaves file truncated or corrupt.
-  Fix: write to temp file, then os.Rename (atomic on same filesystem).
+F5: FinalizeNote write is not atomic [resolved]
+  Resolved together with F4. FinalizeNote writes to a second temp path then
+  calls os.Rename into place — atomic on the same filesystem. No partial
+  writes are possible.

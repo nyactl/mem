@@ -55,8 +55,9 @@ registry; frontmatter is immediately consistent without touching any note file.
 `from` is entities only — slugs that map to `@` inline mentions. URLs belong
 inline in the body as markdown links, not in `from`.
 
-**The human only writes the body.** Frontmatter is stripped before the editor
-opens and regenerated after it closes (sandwich pattern).
+**The human only writes the body.** The editor opens a temp file containing
+the body only — the note file is never modified until `FinalizeNote` writes
+the final result atomically. If the editor crashes, the note file is untouched.
 
 ---
 
@@ -159,11 +160,15 @@ Create a new note.
 - `-l/--label <tag>` — repeatable, tab-completes from index
 - `-f/--from <slug>` — repeatable, tab-completes from index
 - `--file <path>` — repeatable, no short flag; copies file to attachments dir
-- Opens `$EDITOR` with body only (no frontmatter)
-- After save: inline `#tags` and `@people` extracted, frontmatter written
-- If editor closes with empty body AND no flags supplied → file deleted, exit 0
+- Writes body only to a temp file (`/tmp/mem-new-<uuid>.md`), opens `$EDITOR` on it
+- Note file is not created until the editor closes successfully
+- After editor closes (exit 0): runs `FinalizeNote` on temp content + flags,
+  writes note file atomically (`os.WriteFile` to temp path, then `os.Rename`)
+- Temp file deleted after write
+- If editor closes with empty body AND no flags supplied → no file created, exit 0
 - If editor closes with empty body BUT flags were supplied → note saved with
   frontmatter only, no body. Valid per P7 (gradual enrichment).
+- If editor exits non-zero → no file created, exit 0
 
 ### `mem edit [<identifier>]`
 
@@ -172,7 +177,11 @@ Open a note in `$EDITOR`.
 - No identifier → shared fzf picker (same as `mem get`, action on selection differs)
 - Identifier is a slug (`kafka-rebalance`) or bare timestamp (`20260519T143022`)
 - Bare timestamp addresses unnamed notes directly
-- Frontmatter stripped before editor opens, restored after (sandwich pattern)
+- Body extracted from note into a temp file (`/tmp/mem-edit-<uuid>.md`);
+  note file untouched until editor closes
+- After editor closes (exit 0): runs `FinalizeNote` on temp content +
+  preserved metadata, writes note file atomically (`os.Rename`)
+- If editor exits non-zero → note file unchanged, temp file discarded
 - Tab-completes slugs and bare timestamps of unnamed notes — timestamps shown
   with first non-empty body line as context: `20260519T143022  thomas said kafka…`
 
@@ -714,6 +723,23 @@ Considered: keeping slugs as identity (simpler, but F1/F2 persist), UUIDs
 everywhere including prose (unreadable). Middle path: UUIDs in machine-managed
 frontmatter only; prose stays human-readable and is the durable layer if
 mem-cli disappears.
+
+---
+
+### Editor uses a temp file — note file never in intermediate state
+
+**Decision:** `mem new` and `mem edit` write body-only to a temp file in `/tmp`
+and open the editor on that. The note file is not touched until `FinalizeNote`
+is ready to write the complete result. The final write is atomic: write to a
+second temp path, then `os.Rename` into place (atomic on the same filesystem).
+
+Considered: strip frontmatter from the note file in-place before opening the
+editor (prior design). This created a crash window where frontmatter was
+permanently lost if the editor exited abnormally. The temp-file approach
+eliminates that window entirely — a crash at any point leaves the note file in
+its last valid state.
+
+This resolves F4 (no crash recovery) and F5 (non-atomic write) together.
 
 ---
 
