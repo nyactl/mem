@@ -49,3 +49,21 @@ Q26: mem serve form format [done — inline notation only, no separate tag/from 
 Q27: timestamp completions [done — shown with first body line as context, see DESIGN.md]
 Q28: index staleness [done — mtime sufficient, mem index is escape hatch, see DESIGN.md]
 
+Q29: does `mem new <title>` slugify the title automatically, or does the user pass a slug directly?
+[proposed] Auto-slugify. `mem new Kafka Session Timeout` → `kafka-session-timeout.md`. Consistent with `mem rename` behavior. Passing a pre-slugified title still works (idempotent). This matches P1 — capture-first, no friction.
+
+Q30: does `mem mv` update `from:` frontmatter values in other notes, not just inline `@slug` and `[[slug]]` in bodies?
+[proposed] Yes. `mem mv` should rewrite all three: `@slug` in prose, `[[slug]]` in prose, and `from: [slug]` in frontmatter. A person-slug rename that misses frontmatter leaves `mem ls --from old-slug` returning stale results. The confirmation prompt lists affected files regardless of which field matched.
+
+Q31: `mem search <query>` with no results — what output and exit code?
+[proposed] Print nothing to stdout, exit 0. Consistent with grep/rg conventions: no match is not an error. Callers checking for empty output can use `if mem search foo | grep -q .`. Exit 1 is reserved for errors (file unreadable, ripgrep not found).
+
+Q32: `mem rename <old> <new>` where the new slug already exists — error or what?
+[proposed] Error and abort, same as `mem new` on collision: `Error: note "kafka-rebalance" already exists`. Exit 1. Renaming onto an existing slug would silently overwrite it — never correct.
+
+Q33: `mem edit` or `mem get` when `$EDITOR` is not set — what happens?
+[proposed] Error with a clear message: `Error: $EDITOR is not set — set it in your shell profile (e.g. export EDITOR=vim)`. Exit 1. No silent fallback to a hardcoded editor; that would violate P8 (composable — mem speaks the environment's conventions).
+
+Q34: `FinalizeNote` when the editor exits with a non-zero code (e.g. vim `:cq`) — save or discard?
+[proposed] Discard. A non-zero exit from the editor is the user's explicit signal that the edit was abandoned. Save anyway would lose the user's intent. For `mem new`: delete the newly created file (as if the editor was never opened). For `mem edit`: restore the original content from the pre-edit backup taken during the sandwich strip.
+
