@@ -8,6 +8,19 @@ switch.
 
 ---
 
+## Why
+
+Your notes shouldn't live in someone else's infrastructure. Notion can go down,
+Roam can pivot, subscriptions can lapse. mem-cli writes plain `.md` files to a
+directory you own. Back them up with rsync, search them with ripgrep, read them
+in vim — no mem-cli process required, ever.
+
+Capture is a single command from anywhere in the terminal. Notes stay atomic:
+one idea, one file. When you need something, `mem search` or bare `rg` gets you
+there without opening a browser tab.
+
+---
+
 ## Install
 
 ```sh
@@ -18,133 +31,100 @@ Requires Go. Optionally: `fzf`, `bat`, `rg` (ripgrep) for the full experience.
 
 ---
 
-## Storage
-
-```
-~/.mem/
-  notes/          # markdown note files
-  attachments/    # copied attachment files
-```
-
-Config: `$XDG_CONFIG_HOME/mem/config.json` → `~/.config/mem/config.json`
-
----
-
-## File format
-
-**Filename:** `20260511T143022-<slug>.md`
-
-Timestamp is the sole source of creation time — not repeated in frontmatter.
-
-**Frontmatter:**
-
-```markdown
----
-tags: [kafka, rebalance]
-source: kate
-attachments: [/Users/you/.mem/attachments/20260511T143022-diagram.png]
----
-
-Consumer group rebalance blocks all partitions for ~2min with the default eager
-protocol. Fix: switch to cooperative-sticky assignor.
-```
-
-- `tags` — always present, may be empty `[]`
-- `source` — omitted if none; person name or URL
-- `attachments` — omitted if none
-- Nothing else — no `created`, no `updated`, no `title`
-
----
-
 ## Commands
 
-### `mem new <title> [-l <tag>] [-f <file>]`
+### `mem new [<title>] [-l <tag>] [-f <person>] [--body <text>]`
 
-Create a new note. Opens `$EDITOR` after creation.
+Create a note. Opens `$EDITOR`. Inline tags (`#kafka`) and attribution (`@kate`)
+in the body are extracted automatically on save.
 
-- `-l/--label <tag>` — repeatable, tab-completes from tag backend
-- `-s/--source <value>` — person name or URL
-- `-f/--file <path>` — repeatable; copies file into `~/.mem/attachments/`
+`--body` skips the editor — useful for scripts or piped input:
 
-### `mem get [<slug>]`
+```sh
+mem new kafka-rebalance --body "Eager protocol blocks all partitions ~2min. Fix: cooperative-sticky. #kafka"
+echo "..." | mem new kafka-rebalance
+```
 
-View a note. No slug opens fzf picker with bat preview.
+No title → timestamp-only file, promote later with `mem rename`.
 
-### `mem edit [<slug>]`
+### `mem get [<identifier>]`
 
-Open a note in `$EDITOR`. No slug opens fzf picker.
+View a note. No identifier opens an fzf picker with bat preview.
 
-### `mem ls [--tag <tag>]`
+### `mem edit [<identifier>]`
 
-Browse all notes via fzf with bat preview. `--tag/-t` pre-filters by tag.
+Edit a note in `$EDITOR`. No identifier opens an fzf picker.
+
+### `mem ls [--tag <tag>] [--from <person>] [--unnamed]`
+
+Browse notes via fzf. `--unnamed` shows only untitled notes, oldest first — the
+processing queue for fast captures that need a title.
 
 ### `mem search <query>`
 
 Full-text search via ripgrep across `~/.mem/notes/`.
 
-### `mem tags`
+### `mem related <identifier>`
 
-List all tags with note counts, merged from notes and tag backend.
+Notes related to a given note, scored by shared tags and attribution.
 
-### `mem attach <slug> <file> [<file>...]`
+### `mem similar <query>`
 
-Attach one or more files to an existing note.
+Semantic search using local embeddings (requires ollama).
+
+### `mem rename [--tag | --from] <old> <new>`
+
+Rename a note, tag, or person. Always rewrites every reference across all notes.
+
+### `mem attach <identifier> <file>`
+
+Copy a file into `~/.mem/attachments/` and link it to a note.
+
+### `mem serve [--port <n>] [--lan] [--token <secret>]`
+
+Local HTTP capture form. Binds to `127.0.0.1` by default; `--lan` to expose on
+the local network (e.g. capture from a phone). `--token` adds a shared secret.
+
+### `mem tags` / `mem from`
+
+List all tags or attribution values with note counts.
+
+### `mem index`
+
+Rebuild the index cache manually — needed after edits outside mem-cli.
 
 ---
 
-## Tag backend
+## File format
 
-Tags are presented as mem's own. Source is configurable in
-`~/.config/mem/config.json`:
+**Filename:** `20260511T143022-kafka-rebalance.md`
+
+The slug is the title. No heading in the body, no `title:` field.
+
+**Frontmatter** (tool-managed, never shown in the editor):
+
+```markdown
+---
+tags: [kafka, consumer-group]
+from: [kate]
+---
+
+Consumer group rebalance blocks all partitions for ~2min with the default eager
+protocol. Fix: switch to cooperative-sticky assignor. Confirmed by @kate.
+```
+
+Fields omitted when empty. You write the body; the tool manages the metadata.
+
+---
+
+## Configuration
+
+`~/.config/mem/config.json` — all fields optional, defaults shown:
 
 ```json
-{ "tag_backend": "todoist-cli labels" }
+{
+  "notes_dir":       "~/.mem/notes",
+  "attachments_dir": "~/.mem/attachments",
+  "embeddings_url":  "http://localhost:11434"
+}
 ```
-
-Any command producing `id\tname` or `name` per line works. Falls back to tags
-from existing notes if the backend is unavailable.
-
----
-
-## Planned
-
-### `mem append <slug> <line>`
-
-Append a timestamped line to an existing note without opening the editor. Intended for maintenance log notes — one persistent note per entity (a car, a device, a health record) that accumulates entries over time:
-
-```
-mem append car-maintenance "winter tires fitted, 87,432 km, next ~Nov"
-```
-
-Appends:
-```
-2026-06-02 — winter tires fitted, 87,432 km, next ~Nov
-```
-
-This requires a log note convention — a note whose body is a list of dated entries rather than a single atomic fact. The frontmatter format stays the same.
-
-### `@log` label integration (via glue script)
-
-A convention where Todoist tasks tagged `@log` trigger a `mem append` on completion. The task description holds the target mem slug. A personal glue script — separate from both todoist-cli and mem-cli — reads the completed task, extracts the slug, and calls `mem append`.
-
-mem-cli stays fully standalone. The integration is owned by the glue layer, not by either tool.
-
-### Open design questions
-
-- How should mem surface notes related to a set of Todoist tasks without manual tag lookup?
-- Should domain tags be defined in Todoist (as labels) and pulled by mem, or maintained independently in mem?
-- When paperless-ngx attachment backend lands, how do documents link back to Todoist tasks (e.g. a receipt to a Finance task)?
-- What is the stable format for embedding a mem slug in a Todoist task description, so a glue script can parse it reliably?
-
----
-
-## Attachment backend
-
-```json
-{ "attachment_backend": "local" }
-```
-
-**`local` (default)** — copies to `~/.mem/attachments/`, stores absolute path.
-
-**`paperless-ngx-cli` (future)** — uploads via paperless-ngx-cli, stores
-document reference in frontmatter.
