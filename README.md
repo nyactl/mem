@@ -1,10 +1,10 @@
 # mem-cli
 
-Shared external memory for human and AI. Atomic, tagged notes for facts,
-findings, commands, and ideas — captured quickly, looked up fast, readable
-offline or with AI assistance.
+One idea per note. Plain Markdown. Yours forever.
 
-Fully independent. No dependency on any other tool.
+Capture a fact in one command, find it in one more. No app, no account, no sync
+service — just files in `~/.mem` that open in any editor and survive any tool
+switch.
 
 ---
 
