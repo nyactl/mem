@@ -106,6 +106,38 @@ from existing notes if the backend is unavailable.
 
 ---
 
+## Planned
+
+### `mem append <slug> <line>`
+
+Append a timestamped line to an existing note without opening the editor. Intended for maintenance log notes — one persistent note per entity (a car, a device, a health record) that accumulates entries over time:
+
+```
+mem append car-maintenance "winter tires fitted, 87,432 km, next ~Nov"
+```
+
+Appends:
+```
+2026-06-02 — winter tires fitted, 87,432 km, next ~Nov
+```
+
+This requires a log note convention — a note whose body is a list of dated entries rather than a single atomic fact. The frontmatter format stays the same.
+
+### `@log` label integration (via glue script)
+
+A convention where Todoist tasks tagged `@log` trigger a `mem append` on completion. The task description holds the target mem slug. A personal glue script — separate from both todoist-cli and mem-cli — reads the completed task, extracts the slug, and calls `mem append`.
+
+mem-cli stays fully standalone. The integration is owned by the glue layer, not by either tool.
+
+### Open design questions
+
+- How should mem surface notes related to a set of Todoist tasks without manual tag lookup?
+- Should domain tags be defined in Todoist (as labels) and pulled by mem, or maintained independently in mem?
+- When paperless-ngx attachment backend lands, how do documents link back to Todoist tasks (e.g. a receipt to a Finance task)?
+- What is the stable format for embedding a mem slug in a Todoist task description, so a glue script can parse it reliably?
+
+---
+
 ## Attachment backend
 
 ```json
