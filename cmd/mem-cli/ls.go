@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"mem-cli/internal/config"
@@ -12,6 +13,8 @@ import (
 )
 
 var lsTag string
+var lsFrom string
+var lsUnnamed bool
 
 var lsCmd = &cobra.Command{
 	Use:               "ls",
@@ -38,8 +41,35 @@ var lsCmd = &cobra.Command{
 			notes = filtered
 		}
 
+		if lsFrom != "" {
+			var filtered []note.Note
+			for _, n := range notes {
+				for _, f := range n.From {
+					if strings.EqualFold(f, lsFrom) {
+						filtered = append(filtered, n)
+						break
+					}
+				}
+			}
+			notes = filtered
+		}
+
+		if lsUnnamed {
+			var filtered []note.Note
+			for _, n := range notes {
+				if n.IsUnnamed() {
+					filtered = append(filtered, n)
+				}
+			}
+			// Sort oldest first for the processing queue view.
+			sort.Slice(filtered, func(i, j int) bool {
+				return filtered[i].Created.Before(filtered[j].Created)
+			})
+			notes = filtered
+		}
+
 		if len(notes) == 0 {
-			fmt.Fprintln(os.Stderr, "no notes found")
+			fmt.Fprintln(os.Stderr, "No notes yet — run: mem new")
 			return nil
 		}
 
@@ -47,12 +77,15 @@ var lsCmd = &cobra.Command{
 		if err != nil || n.Path == "" {
 			return err
 		}
-		return viewFile(n.Path)
+		return viewBody(n.Path)
 	},
 }
 
 func init() {
 	lsCmd.Flags().StringVarP(&lsTag, "tag", "t", "", "filter by tag")
+	lsCmd.Flags().StringVarP(&lsFrom, "from", "f", "", "filter by from value")
+	lsCmd.Flags().BoolVar(&lsUnnamed, "unnamed", false, "show only unnamed notes, oldest first")
 	lsCmd.RegisterFlagCompletionFunc("tag", tagCompleter)
+	lsCmd.RegisterFlagCompletionFunc("from", fromCompleter)
 	root.AddCommand(lsCmd)
 }

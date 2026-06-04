@@ -10,9 +10,12 @@ import (
 )
 
 type Index struct {
-	DirMtime int64    `json:"dir_mtime"`
-	Tags     []string `json:"tags"`
-	Sources  []string `json:"sources"`
+	DirMtime   int64          `json:"dir_mtime"`
+	Tags       []string       `json:"tags"`
+	From       []string       `json:"from"`
+	TotalNotes int            `json:"total_notes"`
+	TagCounts  map[string]int `json:"tag_counts"`
+	FromCounts map[string]int `json:"from_counts"`
 }
 
 func indexPath(notesDir string) string {
@@ -23,6 +26,9 @@ func indexPath(notesDir string) string {
 // missing or the notes directory has been modified since last build.
 func Load(notesDir string) (Index, error) {
 	info, err := os.Stat(notesDir)
+	if os.IsNotExist(err) {
+		return Index{}, nil
+	}
 	if err != nil {
 		return Index{}, err
 	}
@@ -42,6 +48,9 @@ func Load(notesDir string) (Index, error) {
 // Rebuild scans all notes and writes a fresh index to disk.
 func Rebuild(notesDir string) (Index, error) {
 	info, err := os.Stat(notesDir)
+	if os.IsNotExist(err) {
+		return Index{}, nil
+	}
 	if err != nil {
 		return Index{}, err
 	}
@@ -51,32 +60,37 @@ func Rebuild(notesDir string) (Index, error) {
 		return Index{}, err
 	}
 
-	tagSeen := make(map[string]struct{})
-	srcSeen := make(map[string]struct{})
-	var tags, sources []string
+	tagCounts := make(map[string]int)
+	fromCounts := make(map[string]int)
 
 	for _, n := range notes {
 		for _, t := range n.Tags {
-			if _, ok := tagSeen[t]; !ok {
-				tagSeen[t] = struct{}{}
-				tags = append(tags, t)
-			}
+			tagCounts[t]++
 		}
-		for _, s := range n.Sources {
-			if _, ok := srcSeen[s]; !ok {
-				srcSeen[s] = struct{}{}
-				sources = append(sources, s)
-			}
+		for _, f := range n.From {
+			fromCounts[f]++
 		}
 	}
 
+	var tags []string
+	for t := range tagCounts {
+		tags = append(tags, t)
+	}
+	var froms []string
+	for f := range fromCounts {
+		froms = append(froms, f)
+	}
+
 	sort.Strings(tags)
-	sort.Strings(sources)
+	sort.Strings(froms)
 
 	idx := Index{
-		DirMtime: info.ModTime().UnixNano(),
-		Tags:     tags,
-		Sources:  sources,
+		DirMtime:   info.ModTime().UnixNano(),
+		Tags:       tags,
+		From:       froms,
+		TotalNotes: len(notes),
+		TagCounts:  tagCounts,
+		FromCounts: fromCounts,
 	}
 
 	data, err := json.Marshal(idx)

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"mem-cli/internal/config"
 	"mem-cli/internal/index"
 	"mem-cli/internal/note"
@@ -9,8 +11,8 @@ import (
 )
 
 var editCmd = &cobra.Command{
-	Use:               "edit [<slug>]",
-	Short:             "Open a note in $EDITOR (fzf picker if no slug given)",
+	Use:               "edit [<id>]",
+	Short:             "Open a note in $EDITOR (fzf picker if no id given)",
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: slugCompleter,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -29,24 +31,26 @@ var editCmd = &cobra.Command{
 				return err
 			}
 		} else {
-			n, err = note.FindBySlug(cfg.NotesDir, args[0])
+			n, err = note.FindByIdentifier(cfg.NotesDir, args[0])
 			if err != nil {
 				return err
 			}
 		}
 
-		// Strip frontmatter before opening — human only sees body.
-		tags, sources, attachments, err := note.StripFrontmatter(n.Path)
+		tmpPath, tags, from, attachments, err := note.BeginEdit(n.Path)
 		if err != nil {
 			return err
 		}
 
-		if err := openEditor(n.Path); err != nil {
+		if err := openEditor(tmpPath); err != nil {
+			os.Remove(tmpPath)
+			if isExitError(err) {
+				return nil
+			}
 			return err
 		}
 
-		// Restore frontmatter, merging any inline changes from the edit.
-		if _, err := note.FinalizeNote(n.Path, tags, sources, attachments); err != nil {
+		if _, err := note.CommitEdit(n.Path, tmpPath, tags, from, attachments); err != nil {
 			return err
 		}
 

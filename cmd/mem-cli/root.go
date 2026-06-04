@@ -15,7 +15,7 @@ import (
 )
 
 var root = &cobra.Command{
-	Use:          "mem-cli",
+	Use:          "mem",
 	Short:        "Shared external memory for human and AI",
 	SilenceUsage: true,
 }
@@ -37,33 +37,48 @@ func openEditor(path string) error {
 	return cmd.Run()
 }
 
-// viewFile opens path in $PAGER (bat → less → cat fallback).
-func viewFile(path string) error {
-	pager := os.Getenv("PAGER")
-	if pager == "" {
-		if _, err := exec.LookPath("bat"); err == nil {
-			pager = "bat"
-		} else {
-			pager = "less"
+// isExitError returns true if err is a non-zero exit from an exec'd process.
+func isExitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, ok := err.(*exec.ExitError)
+	return ok
+}
+
+// viewBody reads the body via note.Body and pipes to bat or less or prints directly.
+func viewBody(path string) error {
+	body, err := note.Body(path)
+	if err != nil {
+		return err
+	}
+
+	if _, err := exec.LookPath("bat"); err == nil {
+		cmd := exec.Command("bat", "--language=markdown", "-")
+		cmd.Stdin = strings.NewReader(body)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err == nil {
+			return nil
 		}
 	}
-	parts := strings.Fields(pager)
-	cmd := exec.Command(parts[0], append(parts[1:], path)...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
+
+	if _, err := exec.LookPath("less"); err == nil {
+		cmd := exec.Command("less")
+		cmd.Stdin = strings.NewReader(body)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err == nil {
+			return nil
 		}
-		fmt.Print(string(raw))
 	}
+
+	fmt.Print(body)
 	return nil
 }
 
-// pickNote presents notes in fzf with a bat preview pane and returns the
-// selected note. Returns a zero Note (empty Path) if the user cancelled.
+// pickNote presents notes in fzf and returns the selected note.
+// Returns a zero Note (empty Path) if the user cancelled.
 func pickNote(notes []note.Note) (note.Note, error) {
 	if len(notes) == 0 {
 		return note.Note{}, fmt.Errorf("no notes found")
@@ -71,19 +86,21 @@ func pickNote(notes []note.Note) (note.Note, error) {
 
 	var lines []string
 	for _, n := range notes {
-		tags := strings.Join(n.Tags, ", ")
-		sources := strings.Join(n.Sources, ", ")
-		lines = append(lines, n.Path+"\t"+n.Slug+"\t"+n.CreatedStr()+"\t"+tags+"\t"+sources)
+		display := n.Slug
+		if display == "" {
+			display = "(unnamed)"
+		}
+		lines = append(lines, n.Path+"\t"+display+"\t"+n.CreatedStr())
 	}
 
-	previewCmd := "bat --color=always --style=plain --language=markdown {1}"
-	if _, err := exec.LookPath("bat"); err != nil {
-		previewCmd = "cat {1}"
+	previewCmd := `awk 'BEGIN{f=0}/^---$/{f++;next}f==1{next}{print}' {1}`
+	if _, err := exec.LookPath("bat"); err == nil {
+		previewCmd = `awk 'BEGIN{f=0}/^---$/{f++;next}f==1{next}{print}' {1} | bat --language=markdown --color=always -`
 	}
 
 	args := []string{
 		"--delimiter=\t",
-		"--with-nth=2,3,4,5",
+		"--with-nth=2,3",
 		"--ansi",
 		"--no-sort",
 		"--preview", previewCmd,
@@ -124,21 +141,21 @@ func slugCompleter(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	out := make([]string, len(notes))
 	for i, n := range notes {
 		meta := n.CreatedStr() + " [" + strings.Join(n.Tags, ", ") + "]"
-		if len(n.Sources) > 0 {
-			meta += " @" + strings.Join(n.Sources, ", @")
+		if len(n.From) > 0 {
+			meta += " @" + strings.Join(n.From, ", @")
 		}
-		out[i] = n.Slug + "\t" + meta
+		out[i] = n.Identifier() + "\t" + meta
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
-func sourceCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func fromCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.Load()
 	idx, err := index.Load(cfg.NotesDir)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return idx.Sources, cobra.ShellCompDirectiveNoFileComp
+	return idx.From, cobra.ShellCompDirectiveNoFileComp
 }
 
 func tagCompleter(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
