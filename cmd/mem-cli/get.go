@@ -8,8 +8,8 @@ import (
 )
 
 var getCmd = &cobra.Command{
-	Use:               "get [<slug>]",
-	Short:             "View a note (fzf picker if no slug given)",
+	Use:               "get [<id>]",
+	Short:             "View a note (fzf picker if no id given)",
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: slugCompleter,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -28,13 +28,13 @@ var getCmd = &cobra.Command{
 				return err
 			}
 		} else {
-			n, err = note.FindBySlug(cfg.NotesDir, args[0])
+			n, err = note.FindByIdentifier(cfg.NotesDir, args[0])
 			if err != nil {
 				return err
 			}
 		}
 
-		return viewFile(n.Path)
+		return viewBody(n.Path)
 	},
 }
 

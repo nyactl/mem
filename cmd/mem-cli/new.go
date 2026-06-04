@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -14,15 +15,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var newLabels []string
-var newSources []string
+var newTags []string
+var newFrom []string
 var newFiles []string
+var newBody string
 
 var newCmd = &cobra.Command{
 	Use:   "new [<title>]",
 	Short: "Create a new mem note",
 	Long: `Title is optional. The editor opens with natural text — no frontmatter.
-Write your note, use #tags and @sources inline. Everything is derived on save.`,
+Write your note, use #tags and @from inline. Everything is derived on save.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 		ts := time.Now()
@@ -37,51 +39,94 @@ Write your note, use #tags and @sources inline. Everything is derived on save.`,
 			fmt.Fprintf(os.Stderr, "attached → %s\n", dst)
 		}
 
-		sluggedSources := make([]string, 0, len(newSources))
-		for _, s := range newSources {
-			if slug := note.Slugify(s); slug != "" {
-				sluggedSources = append(sluggedSources, slug)
+		sluggedFrom := make([]string, 0, len(newFrom))
+		for _, f := range newFrom {
+			if slug := note.Slugify(f); slug != "" {
+				sluggedFrom = append(sluggedFrom, slug)
 			}
 		}
 
-		var path string
-		var err error
-
-		if len(args) == 0 {
-			path, err = note.CreateDraft(cfg.NotesDir, ts)
-		} else {
-			slug := note.Slugify(strings.Join(args, " "))
+		var slug string
+		if len(args) > 0 {
+			slug = note.Slugify(strings.Join(args, " "))
 			if slug == "" {
 				return fmt.Errorf("title %q produces an empty slug", strings.Join(args, " "))
 			}
-			path, err = note.Create(cfg.NotesDir, ts, slug)
-		}
-		if err != nil {
-			return err
 		}
 
-		if err := openEditor(path); err != nil {
-			return err
+		// Determine body source.
+		var body string
+		interactive := true
+
+		if newBody != "" {
+			body = newBody
+			interactive = false
+		} else {
+			// Check if stdin is piped.
+			stat, err := os.Stdin.Stat()
+			if err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
+				data, err := io.ReadAll(os.Stdin)
+				if err != nil {
+					return fmt.Errorf("read stdin: %w", err)
+				}
+				body = string(data)
+				interactive = false
+			}
 		}
 
-		finalPath, err := note.FinalizeNote(path, newLabels, sluggedSources, attachmentPaths)
-		if err != nil {
-			return err
+		var finalPath string
+
+		if !interactive {
+			tmpPath, err := note.NewTemp()
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(tmpPath, []byte(body), 0600); err != nil {
+				os.Remove(tmpPath)
+				return err
+			}
+			finalPath, err = note.CommitNew(cfg.NotesDir, ts, slug, tmpPath, newTags, sluggedFrom, attachmentPaths)
+			if err != nil {
+				return err
+			}
+		} else {
+			tmpPath, err := note.NewTemp()
+			if err != nil {
+				return err
+			}
+			if err := openEditor(tmpPath); err != nil {
+				os.Remove(tmpPath)
+				if isExitError(err) {
+					return nil
+				}
+				return err
+			}
+			finalPath, err = note.CommitNew(cfg.NotesDir, ts, slug, tmpPath, newTags, sluggedFrom, attachmentPaths)
+			if err != nil {
+				return err
+			}
 		}
+
 		if finalPath == "" {
 			return nil
 		}
 
 		_, _ = index.Rebuild(cfg.NotesDir)
+		n, err := note.Parse(finalPath)
+		if err != nil {
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "created: %s\n", n.Identifier())
 		return nil
 	},
 }
 
 func init() {
-	newCmd.Flags().StringArrayVarP(&newLabels, "label", "l", nil, "tag, repeatable: -l kafka -l backend")
-	newCmd.Flags().StringArrayVarP(&newSources, "source", "s", nil, "source, repeatable: -s kate -s thomas-mueller")
-	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")
-	newCmd.RegisterFlagCompletionFunc("label", tagCompleter)
-	newCmd.RegisterFlagCompletionFunc("source", sourceCompleter)
+	newCmd.Flags().StringArrayVarP(&newTags, "tag", "t", nil, "tag, repeatable: -t kafka -t backend")
+	newCmd.Flags().StringArrayVarP(&newFrom, "from", "f", nil, "from, repeatable: -f alice -f bob")
+	newCmd.Flags().StringArrayVarP(&newFiles, "attach", "a", nil, "attach file, repeatable")
+	newCmd.Flags().StringVar(&newBody, "body", "", "note body (skips editor)")
+	newCmd.RegisterFlagCompletionFunc("tag", tagCompleter)
+	newCmd.RegisterFlagCompletionFunc("from", fromCompleter)
 	root.AddCommand(newCmd)
 }

@@ -14,14 +14,14 @@ import (
 )
 
 var attachCmd = &cobra.Command{
-	Use:               "attach <slug> <file> [<file>...]",
+	Use:               "attach <id> <file> [<file>...]",
 	Short:             "Attach one or more files to an existing note",
 	Args:              cobra.MinimumNArgs(2),
 	ValidArgsFunction: slugCompleter,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
 
-		n, err := note.FindBySlug(cfg.NotesDir, args[0])
+		n, err := note.FindByIdentifier(cfg.NotesDir, args[0])
 		if err != nil {
 			return err
 		}
