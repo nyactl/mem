@@ -151,7 +151,7 @@ completion same as tags via index.json.
 
 ## Commands
 
-### `mem new [<title>] [-l <tag>] [-f <person>]`
+### `mem new [<title>] [-l <tag>] [-f <person>] [--body <text>]`
 
 Create a new note.
 
@@ -159,6 +159,10 @@ Create a new note.
 - No title → timestamp-only file (`20260519T143022.md`), rename later with `mem rename`
 - `-l/--label <tag>` — repeatable, tab-completes from index
 - `-f/--from <slug>` — repeatable, tab-completes from index
+- `--body <text>` — supply body inline; skips the editor entirely (non-interactive mode)
+- Stdin alternative: if stdin is not a TTY and `--body` is not set, body is read from stdin
+
+**Interactive mode** (default — no `--body`, stdin is a TTY):
 - Writes body only to a temp file (`/tmp/mem-new-<uuid>.md`), opens `$EDITOR` on it
 - Note file is not created until the editor closes successfully
 - After editor closes (exit 0): runs `FinalizeNote` on temp content + flags,
@@ -168,6 +172,13 @@ Create a new note.
 - If editor closes with empty body BUT flags were supplied → note saved with
   frontmatter only, no body. Valid per P7 (gradual enrichment).
 - If editor exits non-zero → no file created, exit 0
+
+**Non-interactive mode** (`--body` supplied, or stdin piped):
+- Runs `FinalizeNote` immediately on the supplied body + flags
+- Writes note file atomically, rebuilds index
+- Empty body with no flags → no file created, exit 0
+- Empty body with flags → note saved with frontmatter only (same as interactive)
+- `$EDITOR` is never consulted — safe to run from scripts and AI agents
 
 ### `mem edit [<identifier>]`
 
@@ -692,6 +703,36 @@ timestamp-only file until promoted via `mem rename`.
 that still need a title, sorted oldest first as a processing queue.
 
 The inbox as a mental model stays. The inbox as a directory does not exist.
+
+---
+
+### Non-interactive creation via `--body` and stdin
+
+**Decision:** `mem new` accepts a `--body <text>` flag and reads from stdin when
+not a TTY. Both skip the editor and run `FinalizeNote` directly. All other flags
+(`-l`, `-f`) compose normally.
+
+Rationale: the editor-based flow is designed for human capture. AI agents and
+scripts need a programmatic path that still runs the full `FinalizeNote` pipeline
+— UUID resolution, inline extraction, atomic write, index rebuild. Writing raw
+files directly bypasses that and produces notes without UUIDs in frontmatter.
+
+`--body` takes precedence over stdin. Stdin is the pipe-friendly form:
+
+```sh
+echo "Hooks run after tool calls — use PostToolUse for side effects. #claude-code" \
+  | mem new claude-code-hook-timing
+```
+
+`--body` is the explicit form suited to AI tool calls:
+
+```sh
+mem new claude-code-hook-timing \
+  --body "Hooks run after tool calls — use PostToolUse for side effects. #claude-code"
+```
+
+Both produce identical output. No new command needed — the flag is an input mode
+switch on `mem new`, not a separate subcommand.
 
 ---
 
