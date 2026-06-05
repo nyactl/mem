@@ -14,9 +14,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 var root = &cobra.Command{
 	Use:          "mem",
-	Short:        "Shared external memory for human and AI",
+	Short:        "One idea per note. Plain Markdown. Yours forever.",
+	Version:      version,
 	SilenceUsage: true,
 }
 
