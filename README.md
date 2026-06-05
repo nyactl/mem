@@ -128,3 +128,32 @@ Fields omitted when empty. You write the body; the tool manages the metadata.
   "embeddings_url":  "http://localhost:11434"
 }
 ```
+
+---
+
+## Log notes
+
+Some notes aren't atomic facts — they're running histories. A maintenance record, a health log, a habit journal. One note per entity, body is a list of dated entries:
+
+```
+2026-06-04 — gym, upper body, 45 min
+2026-06-02 — gym, legs, 40 min
+2026-05-30 — gym, upper body, 50 min
+```
+
+Use `mem edit <slug>` to append manually, or pipe via `--body` in a script:
+
+```sh
+mem new gym-log --body "2026-06-04 — upper body, 45 min #health"
+```
+
+No streak visualization — that belongs in a dedicated habit tracker. What mem gives you is a permanent, offline, searchable record that survives any app switch.
+
+### Planned: `mem append`
+
+A `mem append <slug> <line>` command will prepend a timestamped line to an existing log note without opening the editor — one command, no friction:
+
+```sh
+mem append gym-log "upper body, 45 min"
+# writes: 2026-06-04 — upper body, 45 min
+```
