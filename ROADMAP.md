@@ -31,19 +31,23 @@ Complements `mem search` (exact terms) with association-based retrieval.
 
 ## mem append
 
-Append text to an existing note's body without opening an editor.
+Append a line to an existing note without opening an editor. Primarily useful
+for log notes — one note per entity whose body is a running list of dated
+entries (a maintenance record, a health log, a habit journal):
+
+```
+mem append gym-log "upper body, 45 min"
+# writes: 2026-06-05 — upper body, 45 min
+```
+
+Also useful for one-off additions to any note:
 
 ```
 mem append kafka-rebalance "Follow-up: confirmed fix works in staging. #resolved"
 ```
 
-Appends as a new paragraph, runs the same finalization logic as `mem edit` —
-inline tags and from values extracted and merged into frontmatter.
-
-**Why this matters for P2 (shared external memory):** AI can already read notes
-via files and the index. But writing requires replicating finalization logic.
-`mem append` gives AI a clean, safe write interface: one command, no editor,
-same frontmatter guarantees as any human-driven edit.
+Runs the same finalization logic as `mem edit` — inline tags and from values
+extracted and merged into frontmatter. Atomic write, index rebuilt after.
 
 ---
 
