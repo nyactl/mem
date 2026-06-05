@@ -33,7 +33,7 @@ Requires Go. Optionally: `fzf`, `bat`, `rg` (ripgrep) for the full experience.
 
 ## Commands
 
-### `mem new [<title>] [-l <tag>] [-f <person>] [--body <text>]`
+### `mem new [<title>] [-t <tag>] [-f <person>] [--body <text>]`
 
 Create a note. Opens `$EDITOR`. Inline tags (`#kafka`) and attribution (`@kate`)
 in the body are extracted automatically on save.
@@ -64,26 +64,13 @@ processing queue for fast captures that need a title.
 
 Full-text search via ripgrep across `~/.mem/notes/`.
 
-### `mem related <identifier>`
+### `mem rename <old> <new>`
 
-Notes related to a given note, scored by shared tags and attribution.
-
-### `mem similar <query>`
-
-Semantic search using local embeddings (requires ollama).
-
-### `mem rename [--tag | --from] <old> <new>`
-
-Rename a note, tag, or person. Always rewrites every reference across all notes.
+Rename a note. Rewrites all `[[old-slug]]` references across every note.
 
 ### `mem attach <identifier> <file>`
 
 Copy a file into `~/.mem/attachments/` and link it to a note.
-
-### `mem serve [--port <n>] [--lan] [--token <secret>]`
-
-Local HTTP capture form. Binds to `127.0.0.1` by default; `--lan` to expose on
-the local network (e.g. capture from a phone). `--token` adds a shared secret.
 
 ### `mem tags` / `mem from`
 
@@ -149,4 +136,4 @@ mem new gym-log --body "2026-06-04 — upper body, 45 min #health"
 
 No streak visualization — that belongs in a dedicated habit tracker. What mem gives you is a permanent, offline, searchable record that survives any app switch.
 
-See [ROADMAP.md](ROADMAP.md) for planned features including `mem append`.
+See [ROADMAP.md](ROADMAP.md) for planned features including `mem append`, `mem related`, `mem similar`, and `mem serve`.
