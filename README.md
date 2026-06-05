@@ -136,4 +136,4 @@ mem new gym-log --body "2026-06-04 — upper body, 45 min #health"
 
 No streak visualization — that belongs in a dedicated habit tracker. What mem gives you is a permanent, offline, searchable record that survives any app switch.
 
-See [ROADMAP.md](ROADMAP.md) for planned features including `mem append`, `mem related`, `mem similar`, and `mem serve`.
+See [ROADMAP.md](ROADMAP.md) for planned features.
