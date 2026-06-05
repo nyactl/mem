@@ -149,11 +149,4 @@ mem new gym-log --body "2026-06-04 — upper body, 45 min #health"
 
 No streak visualization — that belongs in a dedicated habit tracker. What mem gives you is a permanent, offline, searchable record that survives any app switch.
 
-### Planned: `mem append`
-
-A `mem append <slug> <line>` command will prepend a timestamped line to an existing log note without opening the editor — one command, no friction:
-
-```sh
-mem append gym-log "upper body, 45 min"
-# writes: 2026-06-04 — upper body, 45 min
-```
+See [ROADMAP.md](ROADMAP.md) for planned features including `mem append`.
