@@ -3,6 +3,7 @@ package note
 import (
 	"bufio"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +23,9 @@ type Note struct {
 	Attachments []string
 	Body        string
 }
+
+// ID returns the stable, rename-proof identifier: the 15-char timestamp string.
+func (n Note) ID() string { return n.Created.Format(tsFormat) }
 
 func (n Note) CreatedStr() string {
 	return n.Created.Format("2006-01-02")
@@ -130,6 +134,26 @@ var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)
 var reInlineSource = regexp.MustCompile(`@([a-z][a-z0-9-]*)`)
 
 var reHeading = regexp.MustCompile(`(?m)^#\s+(.+)$`)
+
+// ExtractInlineTags extracts #tag mentions from body text.
+func ExtractInlineTags(body string) []string { return extractInlineTags(body) }
+
+// ExtractInlineSources extracts @source mentions from body text.
+func ExtractInlineSources(body string) []string { return extractInlineSources(body) }
+
+// MergeTags merges two tag slices, deduplicating.
+func MergeTags(a, b []string) []string { return mergeTags(a, b) }
+
+// MergeSources merges two source slices, deduplicating.
+func MergeSources(a, b []string) []string { return mergeSources(a, b) }
+
+// BuildFrontmatter is the exported form of buildFrontmatter.
+func BuildFrontmatter(tags, sources, attachments []string) string {
+	return buildFrontmatter(tags, sources, attachments)
+}
+
+// FormatTS formats a time as the note ID timestamp string.
+func FormatTS(t time.Time) string { return t.Format(tsFormat) }
 
 func extractInlineTags(body string) []string {
 	matches := reInlineTag.FindAllStringSubmatch(body, -1)
@@ -264,6 +288,43 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	merged := append(existing, newAttachments...)
 	content := buildFrontmatter(tags, sources, merged) + body + "\n"
 	return os.WriteFile(path, []byte(content), 0600)
+}
+
+// FindByID finds a note whose filename starts with the given 15-char timestamp
+// ID. Returns an error if no note matches.
+func FindByID(dir, id string) (Note, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return Note{}, fmt.Errorf("read notes dir: %w", err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), id) && strings.HasSuffix(e.Name(), ".md") {
+			return Parse(filepath.Join(dir, e.Name()))
+		}
+	}
+	return Note{}, fmt.Errorf("note %q not found", id)
+}
+
+// ETag returns a short content hash for a note file, used for HTTP ETags and
+// optimistic concurrency checks.
+func ETag(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	// fnv-64 is fast and sufficient for a personal tool
+	h := fnv.New64a()
+	_, _ = h.Write(data)
+	return fmt.Sprintf("%016x", h.Sum64()), nil
+}
+
+// WriteRaw writes raw content (frontmatter + body) to a note file atomically.
+func WriteRaw(path, content string) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // SourcesFromNotes returns all unique non-empty source values across all notes.
