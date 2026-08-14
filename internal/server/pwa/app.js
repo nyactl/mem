@@ -65,8 +65,11 @@ const store = {
 // ── API client ────────────────────────────────────────────────────────────
 
 const api = {
-  async list() {
-    const r = await fetch('/api/notes');
+  async list(since) {
+    const path = since
+      ? '/api/delta?since=' + encodeURIComponent(since)
+      : '/api/notes';
+    const r = await fetch(path);
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   },

@@ -24,8 +24,13 @@ type Note struct {
 	Body        string
 }
 
-// ID returns the stable, rename-proof identifier: the 15-char timestamp string.
-func (n Note) ID() string { return n.Created.Format(tsFormat) }
+// ID returns the unique note identifier: "{timestamp}-{slug}" — the filename
+// without the .md extension. This is guaranteed unique by the server's
+// uniqueSlug helper. Using the full slug (not just the timestamp) avoids
+// ambiguity when multiple notes are created within the same second.
+func (n Note) ID() string {
+	return n.Created.Format(tsFormat) + "-" + n.Slug
+}
 
 func (n Note) CreatedStr() string {
 	return n.Created.Format("2006-01-02")
@@ -290,17 +295,13 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
-// FindByID finds a note whose filename starts with the given 15-char timestamp
-// ID. Returns an error if no note matches.
+// FindByID finds a note by its ID ("{timestamp}-{slug}", the filename without
+// .md). Exact match is used so same-second notes with different slugs don't
+// collide.
 func FindByID(dir, id string) (Note, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return Note{}, fmt.Errorf("read notes dir: %w", err)
-	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), id) && strings.HasSuffix(e.Name(), ".md") {
-			return Parse(filepath.Join(dir, e.Name()))
-		}
+	path := filepath.Join(dir, id+".md")
+	if _, err := os.Stat(path); err == nil {
+		return Parse(path)
 	}
 	return Note{}, fmt.Errorf("note %q not found", id)
 }

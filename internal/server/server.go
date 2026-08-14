@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"mem-cli/internal/gitops"
@@ -21,10 +22,13 @@ import (
 //go:embed pwa/*
 var pwaFiles embed.FS
 
+const maxBodyBytes = 1 << 20 // 1 MB
+
 // Server hosts the sync REST API and serves the embedded PWA.
 type Server struct {
 	notesDir string
 	token    string // empty = no auth required
+	commitMu sync.Mutex
 }
 
 // New creates a Server that reads and writes notes in notesDir.
@@ -32,62 +36,16 @@ func New(notesDir, token string) *Server {
 	return &Server{notesDir: notesDir, token: token}
 }
 
-// Start initialises the notes dir, ensures git, and listens on addr.
-func (s *Server) Start(addr string) error {
-	if err := os.MkdirAll(s.notesDir, 0700); err != nil {
-		return fmt.Errorf("notes dir: %w", err)
-	}
-	if !gitops.IsRepo(s.notesDir) {
-		if err := gitops.Init(s.notesDir); err != nil {
-			return fmt.Errorf("git init: %w", err)
-		}
-	}
-	gitops.EnsureAuthor(s.notesDir)
-
-	mux := http.NewServeMux()
-
-	// API routes
-	mux.HandleFunc("/api/notes", s.auth(s.handleNotes))
-	mux.HandleFunc("/api/notes/", s.auth(s.handleNote))
-	mux.HandleFunc("/api/delta", s.auth(s.handleDelta))
-	mux.HandleFunc("/api/ingest", s.auth(s.handleIngest))
-
-	// PWA — strip the "pwa/" prefix so /app.js works
-	sub, err := fs.Sub(pwaFiles, "pwa")
-	if err != nil {
-		return err
-	}
-	mux.Handle("/", http.FileServer(http.FS(sub)))
-
-	log.Printf("mem serve  %s  notes=%s", addr, s.notesDir)
-	srv := &http.Server{Addr: addr, Handler: mux}
-	return srv.ListenAndServe()
-}
-
-// StartContext is like Start but honours context cancellation.
+// StartContext initialises the notes dir, ensures git, and listens on addr.
+// It shuts down cleanly when ctx is cancelled.
 func (s *Server) StartContext(ctx context.Context, addr string) error {
-	if err := os.MkdirAll(s.notesDir, 0700); err != nil {
-		return fmt.Errorf("notes dir: %w", err)
+	if err := s.setup(); err != nil {
+		return err
 	}
-	if !gitops.IsRepo(s.notesDir) {
-		if err := gitops.Init(s.notesDir); err != nil {
-			return fmt.Errorf("git init: %w", err)
-		}
-	}
-	gitops.EnsureAuthor(s.notesDir)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/notes", s.auth(s.handleNotes))
-	mux.HandleFunc("/api/notes/", s.auth(s.handleNote))
-	mux.HandleFunc("/api/delta", s.auth(s.handleDelta))
-	mux.HandleFunc("/api/ingest", s.auth(s.handleIngest))
-
-	sub, err := fs.Sub(pwaFiles, "pwa")
+	mux, err := s.buildMux()
 	if err != nil {
 		return err
 	}
-	mux.Handle("/", http.FileServer(http.FS(sub)))
-
 	srv := &http.Server{Addr: addr, Handler: mux}
 	go func() {
 		<-ctx.Done()
@@ -100,6 +58,42 @@ func (s *Server) StartContext(ctx context.Context, addr string) error {
 	return nil
 }
 
+func (s *Server) setup() error {
+	if err := os.MkdirAll(s.notesDir, 0700); err != nil {
+		return fmt.Errorf("notes dir: %w", err)
+	}
+	if !gitops.IsRepo(s.notesDir) {
+		if err := gitops.Init(s.notesDir); err != nil {
+			return fmt.Errorf("git init: %w", err)
+		}
+	}
+	gitops.EnsureAuthor(s.notesDir)
+	return nil
+}
+
+func (s *Server) buildMux() (http.Handler, error) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/notes", s.auth(s.handleNotes))
+	mux.HandleFunc("/api/notes/", s.auth(s.handleNote))
+	mux.HandleFunc("/api/delta", s.auth(s.handleDelta))
+	mux.HandleFunc("/api/ingest", s.auth(s.handleIngest))
+
+	// strip the "pwa/" prefix so /app.js, /sw.js etc. resolve correctly
+	sub, err := fs.Sub(pwaFiles, "pwa")
+	if err != nil {
+		return nil, err
+	}
+	mux.Handle("/", http.FileServer(http.FS(sub)))
+	return mux, nil
+}
+
+// commit serialises git commits so concurrent writes don't race.
+func (s *Server) commit(msg string) {
+	s.commitMu.Lock()
+	defer s.commitMu.Unlock()
+	_ = gitops.Commit(s.notesDir, msg)
+}
+
 // ── auth middleware ────────────────────────────────────────────────────────
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
@@ -109,12 +103,25 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if got != s.token {
+		// constant-time compare prevents timing-based token guessing
+		if !eqConstant(got, s.token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
 	}
+}
+
+// eqConstant compares two strings in constant time.
+func eqConstant(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	var diff byte
+	for i := range a {
+		diff |= a[i] ^ b[i]
+	}
+	return diff == 0
 }
 
 // ── API types ──────────────────────────────────────────────────────────────
@@ -138,7 +145,7 @@ type createRequest struct {
 	Body    string   `json:"body"`
 	Tags    []string `json:"tags"`
 	Sources []string `json:"sources"`
-	Created string   `json:"created"` // ISO8601; use client time for offline capture
+	Created string   `json:"created"` // RFC3339 UTC; use client time for offline capture
 }
 
 type updateRequest struct {
@@ -168,38 +175,32 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
+func (s *Server) listNotes(w http.ResponseWriter, _ *http.Request) {
 	notes, err := note.List(s.notesDir)
 	if err != nil {
-		jsonErr(w, err, http.StatusInternalServerError)
+		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
 	}
 	items := make([]noteItem, 0, len(notes))
 	for _, n := range notes {
 		etag, _ := note.ETag(n.Path)
-		items = append(items, noteItem{
-			ID:      n.ID(),
-			Slug:    n.Slug,
-			Created: n.Created.UTC().Format(time.RFC3339),
-			Tags:    orEmpty(n.Tags),
-			Sources: orEmpty(n.Sources),
-			ETag:    etag,
-		})
+		items = append(items, toItem(n, etag))
 	}
-	jsonOK(w, items)
+	jsonWrite(w, http.StatusOK, items)
 }
 
 func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req createRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, err, http.StatusBadRequest)
+		jsonWrite(w, http.StatusBadRequest, errBody(err))
 		return
 	}
 
 	ts := time.Now()
 	if req.Created != "" {
 		if t, err := time.Parse(time.RFC3339, req.Created); err == nil {
-			ts = t.Local() // filename timestamps are always in local time
+			ts = t.Local() // filenames use local time
 		}
 	}
 
@@ -207,43 +208,26 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 	if slug == "" {
 		slug = "note"
 	}
-
-	// avoid collisions — append a counter suffix if needed
 	slug = uniqueSlug(s.notesDir, ts, slug)
 
-	// merge inline tags/sources from body with explicit ones
 	allTags := note.MergeTags(req.Tags, note.ExtractInlineTags(req.Body))
 	allSources := note.MergeSources(req.Sources, note.ExtractInlineSources(req.Body))
 
-	filename := note.Filename(ts, slug)
-	path := filepath.Join(s.notesDir, filename)
-
+	path := filepath.Join(s.notesDir, note.Filename(ts, slug))
 	content := note.BuildFrontmatter(allTags, allSources, nil) + req.Body
 	if err := note.WriteRaw(path, content); err != nil {
-		jsonErr(w, err, http.StatusInternalServerError)
+		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
 	}
 
-	go func() {
-		_ = gitops.Commit(s.notesDir, "note: add "+note.FormatTS(ts)+ifSlug(slug))
-	}()
-
 	n, _ := note.Parse(path)
 	etag, _ := note.ETag(path)
+
 	w.Header().Set("Location", "/api/notes/"+n.ID())
-	w.Header().Set("ETag", etag)
-	w.WriteHeader(http.StatusCreated)
-	jsonOK(w, noteDetail{
-		noteItem: noteItem{
-			ID:      n.ID(),
-			Slug:    n.Slug,
-			Created: n.Created.UTC().Format(time.RFC3339),
-			Tags:    orEmpty(n.Tags),
-			Sources: orEmpty(n.Sources),
-			ETag:    etag,
-		},
-		Body: n.Body,
-	})
+	setETag(w, etag)
+	jsonWrite(w, http.StatusCreated, toDetail(n, etag))
+
+	go s.commit("note: add " + note.FormatTS(ts) + ifSlug(slug))
 }
 
 // ── GET /api/notes/{id}  PATCH /api/notes/{id}  DELETE /api/notes/{id} ───
@@ -251,8 +235,8 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/notes/")
 	id = strings.TrimSuffix(id, "/")
-	if id == "" {
-		http.Error(w, "missing note id", http.StatusBadRequest)
+	if !isValidID(id) {
+		jsonWrite(w, http.StatusBadRequest, errBody(fmt.Errorf("invalid note id %q", id)))
 		return
 	}
 	switch r.Method {
@@ -270,91 +254,67 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getNote(w http.ResponseWriter, _ *http.Request, id string) {
 	n, err := note.FindByID(s.notesDir, id)
 	if err != nil {
-		jsonErr(w, err, http.StatusNotFound)
+		jsonWrite(w, http.StatusNotFound, errBody(err))
 		return
 	}
 	etag, _ := note.ETag(n.Path)
-	w.Header().Set("ETag", etag)
-	jsonOK(w, noteDetail{
-		noteItem: noteItem{
-			ID:      n.ID(),
-			Slug:    n.Slug,
-			Created: n.Created.UTC().Format(time.RFC3339),
-			Tags:    orEmpty(n.Tags),
-			Sources: orEmpty(n.Sources),
-			ETag:    etag,
-		},
-		Body: n.Body,
-	})
+	setETag(w, etag)
+	jsonWrite(w, http.StatusOK, toDetail(n, etag))
 }
 
 func (s *Server) updateNote(w http.ResponseWriter, r *http.Request, id string) {
 	n, err := note.FindByID(s.notesDir, id)
 	if err != nil {
-		jsonErr(w, err, http.StatusNotFound)
+		jsonWrite(w, http.StatusNotFound, errBody(err))
 		return
 	}
 
 	// optimistic concurrency: If-Match must match current ETag
-	clientETag := r.Header.Get("If-Match")
-	if clientETag != "" {
+	if clientETag := r.Header.Get("If-Match"); clientETag != "" {
 		serverETag, _ := note.ETag(n.Path)
-		if clientETag != serverETag {
-			w.Header().Set("ETag", serverETag)
-			jsonErr(w, fmt.Errorf("conflict: note was modified since etag %q", clientETag), http.StatusConflict)
+		if !eqConstant(clientETag, serverETag) {
+			setETag(w, serverETag)
+			jsonWrite(w, http.StatusConflict,
+				errBody(fmt.Errorf("conflict: modified since etag %q", clientETag)))
 			return
 		}
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req updateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, err, http.StatusBadRequest)
+		jsonWrite(w, http.StatusBadRequest, errBody(err))
 		return
 	}
 
 	allTags := note.MergeTags(req.Tags, note.ExtractInlineTags(req.Body))
 	allSources := note.MergeSources(req.Sources, note.ExtractInlineSources(req.Body))
-
 	content := note.BuildFrontmatter(allTags, allSources, n.Attachments) + req.Body
 	if err := note.WriteRaw(n.Path, content); err != nil {
-		jsonErr(w, err, http.StatusInternalServerError)
+		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
 	}
 
-	go func() {
-		_ = gitops.Commit(s.notesDir, "note: update "+id+ifSlug(n.Slug))
-	}()
-
-	etag, _ := note.ETag(n.Path)
-	w.Header().Set("ETag", etag)
 	n2, _ := note.Parse(n.Path)
-	jsonOK(w, noteDetail{
-		noteItem: noteItem{
-			ID:      n2.ID(),
-			Slug:    n2.Slug,
-			Created: n2.Created.UTC().Format(time.RFC3339),
-			Tags:    orEmpty(n2.Tags),
-			Sources: orEmpty(n2.Sources),
-			ETag:    etag,
-		},
-		Body: n2.Body,
-	})
+	etag, _ := note.ETag(n.Path)
+	setETag(w, etag)
+	jsonWrite(w, http.StatusOK, toDetail(n2, etag))
+
+	go s.commit("note: update " + id + ifSlug(n.Slug))
 }
 
 func (s *Server) deleteNote(w http.ResponseWriter, _ *http.Request, id string) {
 	n, err := note.FindByID(s.notesDir, id)
 	if err != nil {
-		jsonErr(w, err, http.StatusNotFound)
+		jsonWrite(w, http.StatusNotFound, errBody(err))
 		return
 	}
 	if err := os.Remove(n.Path); err != nil {
-		jsonErr(w, err, http.StatusInternalServerError)
+		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
 	}
-	go func() {
-		_ = gitops.Commit(s.notesDir, "note: delete "+id+ifSlug(n.Slug))
-	}()
 	w.WriteHeader(http.StatusNoContent)
+	go s.commit("note: delete " + id + ifSlug(n.Slug))
 }
 
 // ── GET /api/delta?since=RFC3339 ──────────────────────────────────────────
@@ -374,11 +334,11 @@ func (s *Server) handleDelta(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := os.ReadDir(s.notesDir)
 	if err != nil {
-		jsonErr(w, err, http.StatusInternalServerError)
+		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
 	}
 
-	var items []noteItem
+	items := make([]noteItem, 0) // never return null
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
 			continue
@@ -395,18 +355,11 @@ func (s *Server) handleDelta(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		etag, _ := note.ETag(n.Path)
-		items = append(items, noteItem{
-			ID:      n.ID(),
-			Slug:    n.Slug,
-			Created: n.Created.UTC().Format(time.RFC3339),
-			Tags:    orEmpty(n.Tags),
-			Sources: orEmpty(n.Sources),
-			ETag:    etag,
-		})
+		items = append(items, toItem(n, etag))
 	}
 
 	sort.Slice(items, func(i, j int) bool { return items[i].Created > items[j].Created })
-	jsonOK(w, items)
+	jsonWrite(w, http.StatusOK, items)
 }
 
 // ── POST /api/ingest ──────────────────────────────────────────────────────
@@ -417,9 +370,10 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req ingestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, err, http.StatusBadRequest)
+		jsonWrite(w, http.StatusBadRequest, errBody(err))
 		return
 	}
 
@@ -436,51 +390,57 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	slug = uniqueSlug(s.notesDir, ts, slug)
 
-	// from → sources for storage compatibility
 	allTags := note.MergeTags(req.Tags, note.ExtractInlineTags(req.Body))
-	allSources := note.MergeSources(req.From, note.ExtractInlineSources(req.Body))
+	allSources := note.MergeSources(req.From, note.ExtractInlineSources(req.Body)) // from → sources
 
-	filename := note.Filename(ts, slug)
-	path := filepath.Join(s.notesDir, filename)
-
+	path := filepath.Join(s.notesDir, note.Filename(ts, slug))
 	content := note.BuildFrontmatter(allTags, allSources, nil) + req.Body
 	if err := note.WriteRaw(path, content); err != nil {
-		jsonErr(w, err, http.StatusInternalServerError)
+		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
 	}
 
-	go func() {
-		_ = gitops.Commit(s.notesDir, "ingest: "+note.FormatTS(ts)+ifSlug(slug))
-	}()
-
 	n, _ := note.Parse(path)
 	etag, _ := note.ETag(path)
+
 	w.Header().Set("Location", "/api/notes/"+n.ID())
-	w.WriteHeader(http.StatusCreated)
-	jsonOK(w, noteDetail{
-		noteItem: noteItem{
-			ID:      n.ID(),
-			Slug:    n.Slug,
-			Created: n.Created.UTC().Format(time.RFC3339),
-			Tags:    orEmpty(n.Tags),
-			Sources: orEmpty(n.Sources),
-			ETag:    etag,
-		},
-		Body: n.Body,
-	})
+	jsonWrite(w, http.StatusCreated, toDetail(n, etag))
+
+	go s.commit("ingest: " + note.FormatTS(ts) + ifSlug(slug))
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-func jsonOK(w http.ResponseWriter, v any) {
+// jsonWrite sets Content-Type, writes status, then encodes v as JSON.
+// All three happen in order before any body bytes are written.
+func jsonWrite(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func jsonErr(w http.ResponseWriter, err error, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+func errBody(err error) map[string]string { return map[string]string{"error": err.Error()} }
+
+func toItem(n note.Note, etag string) noteItem {
+	return noteItem{
+		ID:      n.ID(),
+		Slug:    n.Slug,
+		Created: n.Created.UTC().Format(time.RFC3339),
+		Tags:    orEmpty(n.Tags),
+		Sources: orEmpty(n.Sources),
+		ETag:    etag,
+	}
+}
+
+func toDetail(n note.Note, etag string) noteDetail {
+	return noteDetail{noteItem: toItem(n, etag), Body: n.Body}
+}
+
+// setETag writes an ETag header preserving RFC 7232 casing ("ETag", not "Etag").
+// Go's textproto.CanonicalMIMEHeaderKey would convert "ETag" → "Etag", so we
+// write directly to the underlying map to bypass canonicalisation.
+func setETag(w http.ResponseWriter, etag string) {
+	w.Header()["ETag"] = []string{etag}
 }
 
 func orEmpty(s []string) []string {
@@ -497,8 +457,34 @@ func ifSlug(slug string) string {
 	return " " + slug
 }
 
+// isValidID accepts note IDs of the form "{timestamp}-{slug}" where timestamp
+// is the 15-char YYYYMMDDTHHMMSS string and slug is one or more lowercase
+// alphanumeric/hyphen chars. Rejects empty slugs, path traversal, and
+// malformed timestamps.
+func isValidID(id string) bool {
+	if len(id) < 17 { // minimum: 15-char ts + "-" + 1-char slug
+		return false
+	}
+	if id[15] != '-' {
+		return false
+	}
+	if _, err := time.Parse("20060102T150405", id[:15]); err != nil {
+		return false
+	}
+	slug := id[16:]
+	if slug == "" {
+		return false
+	}
+	for _, c := range slug {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // uniqueSlug appends a numeric suffix if a file with that slug already exists
-// at the given timestamp.
+// at the given timestamp second.
 func uniqueSlug(dir string, ts time.Time, slug string) string {
 	candidate := slug
 	for i := 2; ; i++ {

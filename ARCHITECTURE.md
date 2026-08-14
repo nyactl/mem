@@ -128,16 +128,24 @@ read logic for their source.
 
 ---
 
-## 8. Note identity: timestamp ID, not slug
+## 8. Note identity: `{timestamp}-{slug}` (full filename minus extension)
 
-**Decision:** The canonical note identifier in the API is the 15-char timestamp
-string (`20260813T160000`), not the slug. Slugs can change via rename; timestamps
-do not.
+**Decision:** The canonical note identifier is the full filename without `.md`:
+`{15-char-ts}-{slug}`, e.g. `20260814T120000-alpha`. Both parts travel together.
 
-**In filenames:** `{ts}-{slug}.md`. Both parts are present but only `ts` is the key.
-`FindByID` scans for files prefixed with the ID.
+**Why (not just timestamp):** Two notes created within the same second would share
+a pure-timestamp ID — `FindByID` prefix scan would return the wrong note and trigger
+false conflicts. Embedding the slug makes every ID unique at creation time.
 
-**API path:** `/api/notes/{id}` where `id = note.ID() = created.Format("20060102T150405")`.
+**In filenames:** `{ts}-{slug}.md`. The ID *is* the filename stem.
+
+**API path:** `/api/notes/{id}` where `id = note.ID()` = `{ts}-{slug}`.
+
+**`FindByID`:** exact match — `filepath.Join(dir, id+".md")`. No prefix scan needed.
+
+**Rename:** renaming a note changes its slug → changes its ID → new file, old file
+deleted. The server handles this by storing the new ID; the client must delete the
+old local file on the next pull if it no longer appears in the remote listing.
 
 ---
 
@@ -190,7 +198,7 @@ To reset the sandbox: `rm .sandbox/notes/*.md`.
 | # | Question | Options | Blocking? |
 |---|---|---|---|
 | O1 | Mobile tech stack | PWA (current) vs SwiftUI vs Flutter | No — PWA ships in v1; native is an upgrade path |
-| O2 | `mem sync` ETag baseline | Where to persist "last known server ETag per note" so pull can detect true conflicts | Yes — current pull does not track baseline |
+| O2 | `mem sync` ETag baseline | **Resolved.** `.mem-sync-state.json` in the notes dir stores last-known server ETag per note. Pull compares local ETag, last-known, and server ETag to distinguish safe overwrite from true conflict. | — |
 | O3 | Todoist integration trigger | Webhook (needs public endpoint) vs polling | No — deferred; depends on todoist-cli issue #16 fix |
 | O4 | License | MIT vs AGPL | Before first public release |
 | O5 | Push notifications on mobile | Requires VAPID, service + infra | After PWA baseline is stable |
