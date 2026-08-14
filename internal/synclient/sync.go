@@ -19,10 +19,10 @@ import (
 
 // Client communicates with a mem serve instance.
 type Client struct {
-	base   string // e.g. "http://192.168.1.10:4747"
-	token  string
-	http   *http.Client
-	dir    string // local notes directory
+	base  string // e.g. "http://192.168.1.10:4747"
+	token string
+	http  *http.Client
+	dir   string // local notes directory
 }
 
 // New creates a Client. base is the server URL, dir the local notes dir.
@@ -33,6 +33,41 @@ func New(base, token, dir string) *Client {
 		http:  &http.Client{Timeout: 30 * time.Second},
 		dir:   dir,
 	}
+}
+
+// ── sync state ────────────────────────────────────────────────────────────
+// The sync state file records the last known server ETag for each note ID.
+// Without this, pull cannot distinguish "remote changed, local unchanged"
+// from "both changed" — it would silently overwrite local edits.
+
+type syncState struct {
+	ServerETags map[string]string `json:"server_etags"`
+	LastSync    string            `json:"last_sync,omitempty"`
+}
+
+func (c *Client) statePath() string {
+	return filepath.Join(c.dir, ".mem-sync-state.json")
+}
+
+func (c *Client) loadState() syncState {
+	data, err := os.ReadFile(c.statePath())
+	if err != nil {
+		return syncState{ServerETags: make(map[string]string)}
+	}
+	var s syncState
+	if err := json.Unmarshal(data, &s); err != nil || s.ServerETags == nil {
+		return syncState{ServerETags: make(map[string]string)}
+	}
+	return s
+}
+
+func (c *Client) saveState(s syncState) {
+	s.LastSync = time.Now().UTC().Format(time.RFC3339)
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(c.statePath(), data, 0600)
 }
 
 // ── remote note types (mirrors server's JSON) ─────────────────────────────
@@ -50,11 +85,14 @@ type remoteNote struct {
 // ── Pull ──────────────────────────────────────────────────────────────────
 
 // Pull downloads all notes from the server that are missing or changed
-// compared to the local store. Returns counts of created and updated notes.
+// relative to the local store. Uses the sync state file to detect true
+// conflicts (both sides changed) vs safe overwrites (only remote changed).
 func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 	if err = os.MkdirAll(c.dir, 0700); err != nil {
 		return
 	}
+
+	state := c.loadState()
 
 	remote, err := c.listRemote()
 	if err != nil {
@@ -62,9 +100,11 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 	}
 
 	for _, rn := range remote {
-		localPath, localETag, exists := c.localInfo(rn.ID)
+		_, localETag, exists := c.localInfo(rn.ID)
+		lastKnown := state.ServerETags[rn.ID]
+
 		if !exists {
-			// fetch full note and write locally
+			// note is new on the server
 			full, fetchErr := c.getRemote(rn.ID)
 			if fetchErr != nil {
 				err = fetchErr
@@ -74,24 +114,24 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 				err = writeErr
 				return
 			}
+			state.ServerETags[rn.ID] = rn.ETag
 			created++
 			continue
 		}
 
-		// already exists locally
-		if rn.ETag == localETag {
-			continue // identical content, skip
+		if rn.ETag == lastKnown {
+			// server hasn't changed since last sync; local edits handled by push
+			continue
 		}
 
-		// ETags differ — check if local was also modified (conflict)
-		localETagNow, _ := note.ETag(localPath)
-		if localETagNow != localETag {
-			// both local and remote changed since last sync: conflict
+		// server has a new version — check if local also diverged since last sync
+		if lastKnown != "" && localETag != lastKnown {
+			// both sides changed since last sync: conflict — do not overwrite
 			conflicts = append(conflicts, rn.ID)
 			continue
 		}
 
-		// only remote changed: safe to overwrite
+		// only server changed: safe overwrite
 		full, fetchErr := c.getRemote(rn.ID)
 		if fetchErr != nil {
 			err = fetchErr
@@ -101,33 +141,38 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 			err = writeErr
 			return
 		}
+		state.ServerETags[rn.ID] = rn.ETag
 		updated++
 	}
+
+	c.saveState(state)
 	return
 }
 
 // ── Push ──────────────────────────────────────────────────────────────────
 
-// Push uploads local notes that the server does not have or has an older
-// version of. Returns counts of created and updated notes on the server.
+// Push uploads local notes that the server does not have or that differ
+// from the server's version.
 func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 	local, err := note.List(c.dir)
 	if err != nil {
 		return
 	}
 
+	state := c.loadState()
+
 	remote, err := c.listRemote()
 	if err != nil {
 		return
 	}
-	remoteMap := make(map[string]string, len(remote)) // id → etag
+	remoteByID := make(map[string]remoteNote, len(remote))
 	for _, rn := range remote {
-		remoteMap[rn.ID] = rn.ETag
+		remoteByID[rn.ID] = rn
 	}
 
 	for _, n := range local {
 		localETag, _ := note.ETag(n.Path)
-		remoteETag, exists := remoteMap[n.ID()]
+		rn, exists := remoteByID[n.ID()]
 
 		if !exists {
 			if pushErr := c.createRemote(n); pushErr != nil {
@@ -138,12 +183,11 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 			continue
 		}
 
-		if localETag == remoteETag {
-			continue // in sync
+		if localETag == rn.ETag {
+			continue // identical content
 		}
 
-		// try to update; server will 409 if it was concurrently modified
-		if pushErr := c.updateRemote(n, remoteETag); pushErr != nil {
+		if pushErr := c.updateRemote(n, rn.ETag); pushErr != nil {
 			if isConflict(pushErr) {
 				conflicts = append(conflicts, n.ID())
 				continue
@@ -151,14 +195,17 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 			err = pushErr
 			return
 		}
+		state.ServerETags[n.ID()] = localETag
 		updated++
 	}
+
+	c.saveState(state)
 	return
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────
 
-func (c *Client) req(method, path string, body any) (*http.Response, error) {
+func (c *Client) req(method, path string, body any, extra map[string]string) (*http.Response, error) {
 	var r io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -177,11 +224,14 @@ func (c *Client) req(method, path string, body any) (*http.Response, error) {
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	for k, v := range extra {
+		req.Header.Set(k, v)
+	}
 	return c.http.Do(req)
 }
 
 func (c *Client) listRemote() ([]remoteNote, error) {
-	resp, err := c.req(http.MethodGet, "/api/notes", nil)
+	resp, err := c.req(http.MethodGet, "/api/notes", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("list remote: %w", err)
 	}
@@ -194,7 +244,7 @@ func (c *Client) listRemote() ([]remoteNote, error) {
 }
 
 func (c *Client) getRemote(id string) (remoteNote, error) {
-	resp, err := c.req(http.MethodGet, "/api/notes/"+url.PathEscape(id), nil)
+	resp, err := c.req(http.MethodGet, "/api/notes/"+url.PathEscape(id), nil, nil)
 	if err != nil {
 		return remoteNote{}, fmt.Errorf("get remote %s: %w", id, err)
 	}
@@ -207,22 +257,26 @@ func (c *Client) getRemote(id string) (remoteNote, error) {
 }
 
 func (c *Client) createRemote(n note.Note) error {
-	body, _ := io.ReadAll(mustOpen(n.Path))
-	_, bodyText := splitFrontmatter(string(body))
+	raw, err := os.ReadFile(n.Path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", n.Path, err)
+	}
+	_, bodyText := splitFrontmatter(string(raw))
 	payload := map[string]any{
 		"title":   n.Slug,
 		"body":    bodyText,
-		"tags":    n.Tags,
-		"sources": n.Sources,
+		"tags":    orEmpty(n.Tags),
+		"sources": orEmpty(n.Sources),
 		"created": n.Created.UTC().Format(time.RFC3339),
 	}
-	resp, err := c.req(http.MethodPost, "/api/notes", payload)
+	resp, err := c.req(http.MethodPost, "/api/notes", payload, nil)
 	if err != nil {
 		return fmt.Errorf("push create %s: %w", n.ID(), err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("push create %s: server returned %d", n.ID(), resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("push create %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
 	}
 	return nil
 }
@@ -230,24 +284,16 @@ func (c *Client) createRemote(n note.Note) error {
 func (c *Client) updateRemote(n note.Note, serverETag string) error {
 	raw, err := os.ReadFile(n.Path)
 	if err != nil {
-		return err
+		return fmt.Errorf("read %s: %w", n.Path, err)
 	}
 	_, bodyText := splitFrontmatter(string(raw))
 	payload := map[string]any{
 		"body":    bodyText,
-		"tags":    n.Tags,
-		"sources": n.Sources,
+		"tags":    orEmpty(n.Tags),
+		"sources": orEmpty(n.Sources),
 	}
-	req, err := http.NewRequest(http.MethodPatch, c.base+"/api/notes/"+url.PathEscape(n.ID()), mustJSON(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("If-Match", serverETag)
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-	resp, err := c.http.Do(req)
+	resp, err := c.req(http.MethodPatch, "/api/notes/"+url.PathEscape(n.ID()), payload,
+		map[string]string{"If-Match": serverETag})
 	if err != nil {
 		return fmt.Errorf("push update %s: %w", n.ID(), err)
 	}
@@ -256,7 +302,8 @@ func (c *Client) updateRemote(n note.Note, serverETag string) error {
 		return conflictErr(n.ID())
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("push update %s: server returned %d", n.ID(), resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("push update %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
 	}
 	return nil
 }
@@ -264,24 +311,19 @@ func (c *Client) updateRemote(n note.Note, serverETag string) error {
 // ── local file helpers ────────────────────────────────────────────────────
 
 func (c *Client) localInfo(id string) (path, etag string, exists bool) {
-	entries, err := os.ReadDir(c.dir)
+	// ID is "{timestamp}-{slug}" — exact match against filename (id + ".md")
+	p := filepath.Join(c.dir, id+".md")
+	et, err := note.ETag(p)
 	if err != nil {
 		return "", "", false
 	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), id) && strings.HasSuffix(e.Name(), ".md") {
-			p := filepath.Join(c.dir, e.Name())
-			et, _ := note.ETag(p)
-			return p, et, true
-		}
-	}
-	return "", "", false
+	return p, et, true
 }
 
 func (c *Client) writeLocal(rn remoteNote) error {
 	ts, err := time.ParseInLocation(time.RFC3339, rn.Created, time.UTC)
 	if err != nil {
-		return fmt.Errorf("parse created time for %s: %w", rn.ID, err)
+		return fmt.Errorf("parse created for %s: %w", rn.ID, err)
 	}
 	ts = ts.Local()
 
@@ -293,25 +335,24 @@ func (c *Client) writeLocal(rn remoteNote) error {
 	filename := note.Filename(ts, slug)
 	path := filepath.Join(c.dir, filename)
 
-	// if a file with this timestamp exists but different slug (rename), remove old
-	entries, _ := os.ReadDir(c.dir)
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), rn.ID) && e.Name() != filename {
-			_ = os.Remove(filepath.Join(c.dir, e.Name()))
-		}
-	}
-
 	content := note.BuildFrontmatter(rn.Tags, rn.Sources, nil) + rn.Body
 	return note.WriteRaw(path, content)
 }
 
-// ── small utilities ───────────────────────────────────────────────────────
+// ── utilities ─────────────────────────────────────────────────────────────
 
 type conflictError struct{ id string }
 
 func (e conflictError) Error() string { return "conflict: " + e.id }
 func conflictErr(id string) error     { return conflictError{id} }
 func isConflict(err error) bool       { _, ok := err.(conflictError); return ok }
+
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
 
 func splitFrontmatter(content string) (fm, body string) {
 	if !strings.HasPrefix(content, "---\n") {
@@ -323,17 +364,4 @@ func splitFrontmatter(content string) (fm, body string) {
 	}
 	end := 4 + idx + 5
 	return content[:end], content[end:]
-}
-
-func mustOpen(path string) io.Reader {
-	f, err := os.Open(path)
-	if err != nil {
-		return strings.NewReader("")
-	}
-	return f
-}
-
-func mustJSON(v any) io.Reader {
-	data, _ := json.Marshal(v)
-	return bytes.NewReader(data)
 }

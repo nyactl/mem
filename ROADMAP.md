@@ -125,3 +125,76 @@ Watch clause 4.2 — liability cap lower than usual.
 ```
 
 `mem search paperless://1234` finds it.
+
+---
+
+## Archiving records from external systems
+
+External systems degrade retrieval once a record is closed. A closed ticket, a
+completed task, an archived thread: the data usually still exists, but the paths
+back to it — search, listings, filters — stop covering it. The record becomes
+reachable only by an ID nobody remembers. Functionally that is the same as
+losing it.
+
+This is the case mem is already shaped for: the external system owns the
+operational record, mem owns the story that has to outlive it.
+
+**This is a convention, not an integration.** mem gains no knowledge of any
+external tool — no import command, no adapter, no provider config. Any command
+that prints text composes today:
+
+```sh
+mem new "account closure at the fund provider" \
+  --body "$(some-cli show 1234)" \
+  -t archive -t gdpr
+```
+
+`--body` already skips the editor, so nothing blocks and nothing new is needed
+for the basic flow (P1, P8).
+
+### Origin references go inline, not in frontmatter
+
+The origin reference — a URL, or a `scheme://id` — belongs **in the note body,
+verbatim**:
+
+```
+Closed 2026-08-12. Account may or may not still exist; login now returns a
+generic error, which proves nothing either way.
+
+Origin: https://example.invalid/app/task/1234
+```
+
+Not in `from`. `from` values are slugs by design (P4), and slugification
+destroys a URL — `https://example.invalid/app/task/1234` becomes
+`httpsexampleinvalidapptask1234`, which resolves to nothing and is not even
+recognisable. This is the same choice already made for paperless references,
+which live inline as `paperless://1234` and are found with `mem search`.
+
+Two consequences worth stating: the body stays self-contained for a human
+reading it with any text tool (P3), and no new frontmatter field is introduced
+for a job an existing mechanism already does.
+
+### One record, one note
+
+Archive a record when there is a story worth keeping — a decision, a sequence
+of attempts, a dated request, an outcome that surprised you. Not on every
+closure. Bulk-exporting a backlog produces a write-only pile and violates P6;
+it also recreates the exact problem the archive was meant to solve.
+
+A useful test: would you be annoyed to re-derive this in eighteen months? If
+not, close the record and write nothing.
+
+### Reopening the thread
+
+The value shows up when the thing resurfaces — a letter arrives, a charge
+appears, someone asks. The user searches a term they remember, finds the note,
+and appends what just happened. That is `mem append` (above), and this use case
+is the strongest argument for it: an archived note is not a tombstone, it is a
+thread that goes quiet and later resumes.
+
+### Possible small addition
+
+`--body -` to read the body from stdin. `--body "$(cmd)"` already works and is
+adequate; stdin only matters for bodies large enough to strain argument limits,
+or when the producing command streams. Low priority, and it stays agnostic —
+mem reads text, it does not know who wrote it.
