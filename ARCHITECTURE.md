@@ -193,6 +193,76 @@ To reset the sandbox: `rm .sandbox/notes/*.md`.
 
 ---
 
+## 12. TLS — nginx reverse proxy, not native Go TLS
+
+**Decision:** `mem serve` binds to `127.0.0.1:4747` (loopback only). nginx
+terminates TLS on port 443 and proxies to it. Cert renewal is handled by Certbot.
+
+**Why not native Go TLS:** Go's `ListenAndServeTLS` requires a cert path and a
+restart on renewal — Certbot post-deploy hooks can do this, but it adds ceremony.
+nginx with Certbot is a solved, self-renewing stack that every Linux host already
+knows how to operate. Keeping TLS out of the Go binary also means the binary works
+on LANs (no cert needed) without any flag changes.
+
+**Why not a container:** Docker adds a runtime dependency and an extra process
+boundary. The goal is a single binary on the server host, managed by systemd.
+
+**nginx site config** (`/etc/nginx/sites-available/mem`):
+
+```nginx
+server {
+    listen 80;
+    server_name mem.example.internal;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name mem.example.internal;
+
+    ssl_certificate     /etc/letsencrypt/live/mem.example.internal/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mem.example.internal/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass         http://127.0.0.1:4747;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+**systemd unit** (`/etc/systemd/system/mem.service`):
+
+```ini
+[Unit]
+Description=mem note server
+After=network.target
+
+[Service]
+Type=simple
+Environment=MEM_CONFIG=/etc/mem/config.json
+ExecStart=/usr/local/bin/mem-cli serve --addr 127.0.0.1:4747
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Setup checklist:**
+1. `certbot --nginx -d mem.example.internal` (or DNS challenge for private domains)
+2. `systemctl enable --now mem`
+3. Set `server_url` in the client config to `https://mem.example.internal`
+4. Generate a token: `openssl rand -hex 32` → set `auth_token` on server and client
+
+**LAN-only alternative:** skip nginx and TLS entirely; run `mem serve` bound to
+the LAN interface and access via Tailscale or WireGuard. The bearer token is still
+required; the VPN provides transport security.
+
+---
+
 ## Open decisions (not yet resolved)
 
 | # | Question | Options | Blocking? |
