@@ -71,9 +71,12 @@ func pickNote(notes []note.Note) (note.Note, error) {
 
 	var lines []string
 	for _, n := range notes {
-		tags := strings.Join(n.Tags, ", ")
-		sources := strings.Join(n.Sources, ", ")
-		lines = append(lines, n.Path+"\t"+n.Slug+"\t"+n.CreatedStr()+"\t"+tags+"\t"+sources)
+		ts := n.Created.Format("2006-01-02 15:04:05")
+		tags := ""
+		for _, t := range n.Tags {
+			tags += "#" + t + " "
+		}
+		lines = append(lines, n.Path+"\t"+ts+"\t"+n.Slug+"\t"+strings.TrimRight(tags, " "))
 	}
 
 	previewCmd := "bat --color=always --style=plain --language=markdown {1}"
@@ -83,7 +86,7 @@ func pickNote(notes []note.Note) (note.Note, error) {
 
 	args := []string{
 		"--delimiter=\t",
-		"--with-nth=2,3,4,5",
+		"--with-nth=2,3,4",
 		"--ansi",
 		"--no-sort",
 		"--preview", previewCmd,
