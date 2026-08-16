@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ Inline #tags and @sources in the text are extracted automatically.
 		}
 		allSources := note.MergeSources(sluggedSources, note.ExtractInlineSources(body))
 
-		slug := note.Slugify(firstWords(body, 6))
+		slug := note.Slugify(firstWords(stripInlineMarkers(body), 4))
 		if slug == "" {
 			slug = "snap"
 		}
@@ -71,6 +72,13 @@ func firstWords(s string, n int) string {
 		words = words[:n]
 	}
 	return strings.Join(words, " ")
+}
+
+// stripInlineMarkers removes #tag and @source tokens so they don't bleed into slugs.
+var reMarkers = regexp.MustCompile(`[#@][a-zA-Z][a-zA-Z0-9-]*`)
+
+func stripInlineMarkers(s string) string {
+	return strings.TrimSpace(reMarkers.ReplaceAllString(s, ""))
 }
 
 func init() {
