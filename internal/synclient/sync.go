@@ -36,13 +36,23 @@ func New(base, token, dir string) *Client {
 }
 
 // ── sync state ────────────────────────────────────────────────────────────
-// The sync state file records the last known server ETag for each note ID.
-// Without this, pull cannot distinguish "remote changed, local unchanged"
-// from "both changed" — it would silently overwrite local edits.
+// Tracks per-note ETags from the last sync so pull can distinguish
+// "server changed, local untouched" from "both changed" (true conflict).
+//
+// We store both the server ETag and the local ETag observed right after
+// writing the file. Comparing against the server ETag alone is insufficient:
+// writeLocal reconstructs frontmatter from the JSON response, so the local
+// file is rarely byte-identical to the server file — ETags diverge after
+// every pull, producing false conflicts on the next one.
+
+type noteState struct {
+	ServerETag string `json:"server_etag"`
+	LocalETag  string `json:"local_etag"`
+}
 
 type syncState struct {
-	ServerETags map[string]string `json:"server_etags"`
-	LastSync    string            `json:"last_sync,omitempty"`
+	Notes    map[string]noteState `json:"notes"`
+	LastSync string               `json:"last_sync,omitempty"`
 }
 
 func (c *Client) statePath() string {
@@ -52,11 +62,11 @@ func (c *Client) statePath() string {
 func (c *Client) loadState() syncState {
 	data, err := os.ReadFile(c.statePath())
 	if err != nil {
-		return syncState{ServerETags: make(map[string]string)}
+		return syncState{Notes: make(map[string]noteState)}
 	}
 	var s syncState
-	if err := json.Unmarshal(data, &s); err != nil || s.ServerETags == nil {
-		return syncState{ServerETags: make(map[string]string)}
+	if err := json.Unmarshal(data, &s); err != nil || s.Notes == nil {
+		return syncState{Notes: make(map[string]noteState)}
 	}
 	return s
 }
@@ -100,11 +110,10 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 	}
 
 	for _, rn := range remote {
-		_, localETag, exists := c.localInfo(rn.ID)
-		lastKnown := state.ServerETags[rn.ID]
+		localPath, localETag, exists := c.localInfo(rn.ID)
+		ns := state.Notes[rn.ID]
 
 		if !exists {
-			// note is new on the server
 			full, fetchErr := c.getRemote(rn.ID)
 			if fetchErr != nil {
 				err = fetchErr
@@ -114,19 +123,22 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 				err = writeErr
 				return
 			}
-			state.ServerETags[rn.ID] = rn.ETag
+			localETagAfter, _ := note.ETag(localPath)
+			state.Notes[rn.ID] = noteState{ServerETag: rn.ETag, LocalETag: localETagAfter}
 			created++
 			continue
 		}
 
-		if rn.ETag == lastKnown {
-			// server hasn't changed since last sync; local edits handled by push
+		serverChanged := rn.ETag != ns.ServerETag
+		localChanged := ns.LocalETag != "" && localETag != ns.LocalETag
+
+		if !serverChanged {
+			// server unchanged since last sync; local edits handled by push
 			continue
 		}
 
-		// server has a new version — check if local also diverged since last sync
-		if lastKnown != "" && localETag != lastKnown {
-			// both sides changed since last sync: conflict — do not overwrite
+		if localChanged {
+			// both sides changed since last sync: true conflict
 			conflicts = append(conflicts, rn.ID)
 			continue
 		}
@@ -141,7 +153,8 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 			err = writeErr
 			return
 		}
-		state.ServerETags[rn.ID] = rn.ETag
+		localETagAfter, _ := note.ETag(localPath)
+		state.Notes[rn.ID] = noteState{ServerETag: rn.ETag, LocalETag: localETagAfter}
 		updated++
 	}
 
@@ -195,7 +208,7 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 			err = pushErr
 			return
 		}
-		state.ServerETags[n.ID()] = localETag
+		state.Notes[n.ID()] = noteState{ServerETag: localETag, LocalETag: localETag}
 		updated++
 	}
 
