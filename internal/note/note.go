@@ -50,6 +50,17 @@ func Filename(ts time.Time, slug string) string {
 	return ts.Format(tsFormat) + "-" + slug + ".md"
 }
 
+// FilePath returns the full path for a note given a directory, timestamp, and slug.
+func FilePath(dir string, ts time.Time, slug string) string {
+	return filepath.Join(dir, Filename(ts, slug))
+}
+
+// Exists reports whether a file exists at the given path.
+func Exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // Create writes a new note file with a heading prompt and returns its path.
 // Frontmatter is not written — FinalizeNote generates it after the editor closes.
 func Create(dir string, ts time.Time, slug string) (string, error) {
