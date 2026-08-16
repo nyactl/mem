@@ -29,7 +29,10 @@ Inline #tags and @sources in the text are extracted automatically.
 		cfg := config.Load()
 		ts := time.Now()
 
-		body := strings.Join(args, " ")
+		body := strings.TrimSpace(strings.Join(args, " "))
+		if body == "" {
+			return fmt.Errorf("snap requires non-empty text")
+		}
 
 		allTags := note.MergeTags(snapLabels, note.ExtractInlineTags(body))
 		sluggedSources := make([]string, 0, len(snapSources))
