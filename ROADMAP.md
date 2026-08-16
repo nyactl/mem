@@ -4,6 +4,39 @@ Ideas ranked by impact on the core use case. Not a commitment.
 
 ---
 
+## mem import
+
+Migrate existing plain-markdown journals into mem's filename schema.
+
+Old format (common): `2025-10-12_slug.md` — date only, no time, underscore separator.
+mem format: `20251012T120000-slug.md` — local noon used as synthetic time when no
+time is present in the file.
+
+```
+mem import ~/journal/          # dry-run by default: prints what would happen
+mem import ~/journal/ --apply  # writes files to notes dir, skips duplicates
+mem import ~/journal/ --apply --tag imported --tag journal
+```
+
+**What it does per file:**
+1. Parse `YYYY-MM-DD_slug.md` (and `YYYY-MM-DD-slug.md`) from the filename
+2. Read existing frontmatter — preserve tags, sources, attachments
+3. Merge any `--tag` flags into the tags list
+4. Write to `notesDir` as `YYYYMMDDTHHmmSS-slug.md` with the synthetic timestamp
+5. Skip if a note with that slug and date already exists
+
+**Multiple source dirs:** run the command once per dir. Tags distinguish origin:
+
+```
+mem import ~/journal/  --apply --tag journal
+mem import ~/atlas/    --apply --tag atlas
+mem import ~/notes-rewe/ --apply --tag rewe
+```
+
+**Does not delete the originals** — that is the user's decision after verifying.
+
+---
+
 ## mem related
 
 Show notes connected to a given note by shared tags, from values, and explicit
