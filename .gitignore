@@ -1,3 +1,4 @@
 /mem-cli
 /mem
 .sandbox/
+frontend/node_modules/

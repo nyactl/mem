@@ -1,17 +1,26 @@
 BIN := mem
 
-.PHONY: build install test \
+.PHONY: build install test ui ui-dev \
         sandbox-serve sandbox-new sandbox-snap sandbox-day \
         sandbox-pull sandbox-push sandbox-ls
 
-build:
+build: ui
 	go build -o $(BIN) ./cmd/mem
 
-install:
+install: ui
 	go install ./cmd/mem
 
 test:
 	go test ./...
+
+# ── frontend ──────────────────────────────────────────────────────────────
+# Build Svelte → internal/web/dist/ then embed into binary via go:embed.
+
+ui:
+	cd frontend && npm run build
+
+ui-dev:
+	cd frontend && npm run dev
 
 # ── sandbox targets ───────────────────────────────────────────────────────
 # Two separate dirs mirror real deployment:

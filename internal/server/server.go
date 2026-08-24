@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -17,10 +16,8 @@ import (
 
 	"mem/internal/gitops"
 	"mem/internal/note"
+	"mem/internal/web"
 )
-
-//go:embed pwa/*
-var pwaFiles embed.FS
 
 const maxBodyBytes = 1 << 20 // 1 MB
 
@@ -78,8 +75,7 @@ func (s *Server) buildMux() (http.Handler, error) {
 	mux.HandleFunc("/api/delta", s.auth(s.handleDelta))
 	mux.HandleFunc("/api/ingest", s.auth(s.handleIngest))
 
-	// strip the "pwa/" prefix so /app.js, /sw.js etc. resolve correctly
-	sub, err := fs.Sub(pwaFiles, "pwa")
+	sub, err := fs.Sub(web.FS, "dist")
 	if err != nil {
 		return nil, err
 	}
