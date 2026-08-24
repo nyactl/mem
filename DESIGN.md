@@ -1,7 +1,6 @@
 # mem
 
-Shared external memory for human and AI. Atomic notes for facts, findings,
-commands, and ideas — captured quickly, looked up fast.
+Atomic notes for facts, findings, commands, and ideas — captured quickly, looked up fast.
 
 ---
 
@@ -248,7 +247,7 @@ Manually rebuild the index cache.
 - Plain `mem index` — rebuilds `~/.mem/notes/.mem-index.json` from scratch
 - `--embeddings` — additionally regenerates vectors for notes whose mtime is
   newer than their last-embedded timestamp in `~/.mem/notes/.mem-vectors.db`
-- Needed after external edits (AI writes, direct file edits outside mem)
+- Needed after external edits (direct file edits outside mem)
 - Automatic rebuild happens after every mem write command; this is the manual
   escape hatch
 
@@ -817,7 +816,7 @@ the primary store.
 
 At realistic personal scale (5k–20k notes, 3–5 captures/day over many years),
 flat files with ripgrep are fast enough for every operation. The more important
-reason is P2: an AI agent can read notes with nothing but filesystem access —
+reason is P5: any tool can read notes with nothing but filesystem access —
 no mem process, no DB connection, no schema. Moving metadata into a DB
 would make mem a required intermediary and break that guarantee.
 

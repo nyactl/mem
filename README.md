@@ -1,8 +1,7 @@
 # mem
 
-Shared external memory for human and AI. Atomic, tagged notes for facts,
-findings, commands, and ideas — captured quickly, looked up fast, readable
-offline or with AI assistance.
+Atomic, tagged notes for facts, findings, commands, and ideas —
+captured quickly, looked up fast, readable anywhere.
 
 Fully independent. No dependency on any other tool.
 
