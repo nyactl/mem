@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"mem-cli/internal/attachment"
-	"mem-cli/internal/config"
-	"mem-cli/internal/index"
-	"mem-cli/internal/note"
+	"mem/internal/attachment"
+	"mem/internal/config"
+	"mem/internal/index"
+	"mem/internal/note"
 
 	"github.com/spf13/cobra"
 )
@@ -78,10 +78,10 @@ Write your note, use #tags and @sources inline. Everything is derived on save.`,
 }
 
 func init() {
-	newCmd.Flags().StringArrayVarP(&newLabels, "label", "l", nil, "tag, repeatable: -l kafka -l backend")
+	newCmd.Flags().StringArrayVarP(&newLabels, "tag", "t", nil, "tag, repeatable: -t kafka -t backend")
 	newCmd.Flags().StringArrayVarP(&newSources, "source", "s", nil, "source, repeatable: -s kate -s thomas-mueller")
 	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")
-	newCmd.RegisterFlagCompletionFunc("label", tagCompleter)
+	newCmd.RegisterFlagCompletionFunc("tag", tagCompleter)
 	newCmd.RegisterFlagCompletionFunc("source", sourceCompleter)
 	root.AddCommand(newCmd)
 }

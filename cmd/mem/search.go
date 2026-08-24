@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"mem-cli/internal/config"
+	"mem/internal/config"
 
 	"github.com/spf13/cobra"
 )

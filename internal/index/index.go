@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"mem-cli/internal/note"
+	"mem/internal/note"
 )
 
 type Index struct {

@@ -1,4 +1,4 @@
-# mem-cli
+# mem
 
 Shared external memory for human and AI. Atomic, tagged notes for facts,
 findings, commands, and ideas — captured quickly, looked up fast, readable

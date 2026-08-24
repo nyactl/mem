@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"mem-cli/internal/attachment"
-	"mem-cli/internal/config"
-	"mem-cli/internal/index"
-	"mem-cli/internal/note"
+	"mem/internal/attachment"
+	"mem/internal/config"
+	"mem/internal/index"
+	"mem/internal/note"
 
 	"github.com/spf13/cobra"
 )

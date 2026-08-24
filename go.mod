@@ -1,4 +1,4 @@
-module mem-cli
+module mem
 
 go 1.23
 

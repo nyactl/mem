@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"mem-cli/internal/note"
+	"mem/internal/note"
 )
 
 // Client communicates with a mem serve instance.
@@ -188,9 +188,13 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 		rn, exists := remoteByID[n.ID()]
 
 		if !exists {
-			if pushErr := c.createRemote(n); pushErr != nil {
+			serverETag, pushErr := c.createRemote(n)
+			if pushErr != nil {
 				err = pushErr
 				return
+			}
+			if serverETag != "" {
+				state.Notes[n.ID()] = noteState{ServerETag: serverETag, LocalETag: localETag}
 			}
 			created++
 			continue
@@ -200,7 +204,8 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 			continue // identical content
 		}
 
-		if pushErr := c.updateRemote(n, rn.ETag); pushErr != nil {
+		serverETag, pushErr := c.updateRemote(n, rn.ETag)
+		if pushErr != nil {
 			if isConflict(pushErr) {
 				conflicts = append(conflicts, n.ID())
 				continue
@@ -208,7 +213,9 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 			err = pushErr
 			return
 		}
-		state.Notes[n.ID()] = noteState{ServerETag: localETag, LocalETag: localETag}
+		if serverETag != "" {
+			state.Notes[n.ID()] = noteState{ServerETag: serverETag, LocalETag: localETag}
+		}
 		updated++
 	}
 
@@ -269,10 +276,10 @@ func (c *Client) getRemote(id string) (remoteNote, error) {
 	return n, json.NewDecoder(resp.Body).Decode(&n)
 }
 
-func (c *Client) createRemote(n note.Note) error {
+func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 	raw, err := os.ReadFile(n.Path)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", n.Path, err)
+		return "", fmt.Errorf("read %s: %w", n.Path, err)
 	}
 	_, bodyText := splitFrontmatter(string(raw))
 	payload := map[string]any{
@@ -284,20 +291,24 @@ func (c *Client) createRemote(n note.Note) error {
 	}
 	resp, err := c.req(http.MethodPost, "/api/notes", payload, nil)
 	if err != nil {
-		return fmt.Errorf("push create %s: %w", n.ID(), err)
+		return "", fmt.Errorf("push create %s: %w", n.ID(), err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("push create %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
+		return "", fmt.Errorf("push create %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
 	}
-	return nil
+	var result remoteNote
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", nil // non-fatal: sync state won't be saved but note was created
+	}
+	return result.ETag, nil
 }
 
-func (c *Client) updateRemote(n note.Note, serverETag string) error {
+func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag string, err error) {
 	raw, err := os.ReadFile(n.Path)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", n.Path, err)
+		return "", fmt.Errorf("read %s: %w", n.Path, err)
 	}
 	_, bodyText := splitFrontmatter(string(raw))
 	payload := map[string]any{
@@ -308,17 +319,21 @@ func (c *Client) updateRemote(n note.Note, serverETag string) error {
 	resp, err := c.req(http.MethodPatch, "/api/notes/"+url.PathEscape(n.ID()), payload,
 		map[string]string{"If-Match": serverETag})
 	if err != nil {
-		return fmt.Errorf("push update %s: %w", n.ID(), err)
+		return "", fmt.Errorf("push update %s: %w", n.ID(), err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusConflict {
-		return conflictErr(n.ID())
+		return "", conflictErr(n.ID())
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("push update %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
+		return "", fmt.Errorf("push update %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
 	}
-	return nil
+	var result remoteNote
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", nil
+	}
+	return result.ETag, nil
 }
 
 // ── local file helpers ────────────────────────────────────────────────────

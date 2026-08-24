@@ -28,7 +28,7 @@ the same key across every note.
 
 P5 — Durable storage
 Plain text markdown with YAML frontmatter. The format predates and will outlive
-mem-cli. Notes remain readable and searchable with any text tool if mem-cli
+mem. Notes remain readable and searchable with any text tool if mem
 disappears.
 
 P6 — Atomic

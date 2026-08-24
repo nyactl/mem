@@ -1,8 +1,8 @@
 package main
 
 import (
-	"mem-cli/internal/config"
-	"mem-cli/internal/note"
+	"mem/internal/config"
+	"mem/internal/note"
 
 	"github.com/spf13/cobra"
 )

@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"mem-cli/internal/gitops"
-	"mem-cli/internal/note"
+	"mem/internal/gitops"
+	"mem/internal/note"
 )
 
 //go:embed pwa/*

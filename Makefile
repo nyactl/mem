@@ -1,29 +1,46 @@
-BIN := mem-cli
+BIN := mem
 
-.PHONY: build install test sandbox-serve sandbox-new sandbox-pull sandbox-push
+.PHONY: build install test \
+        sandbox-serve sandbox-new sandbox-snap sandbox-day \
+        sandbox-pull sandbox-push sandbox-ls
 
 build:
-	go build -o $(BIN) ./cmd/mem-cli
+	go build -o $(BIN) ./cmd/mem
 
 install:
-	go install ./cmd/mem-cli
+	go install ./cmd/mem
 
 test:
 	go test ./...
 
 # ── sandbox targets ───────────────────────────────────────────────────────
-# Uses .sandbox/config.json; notes land in .sandbox/notes/ (git-tracked there,
-# gitignored from this repo). Run mem commands against the sandbox with:
-#   MEM_CONFIG=.sandbox/config.json ./mem-cli <command>
+# Two separate dirs mirror real deployment:
+#   .sandbox/server/ — what mem serve reads/writes (git-backed)
+#   .sandbox/local/  — local client notes, syncs to/from the server
+#
+# Typical flow:
+#   make sandbox-serve          (terminal 1 — leave running)
+#   make sandbox-snap ARGS="hello world #test"
+#   make sandbox-push
+#   make sandbox-pull
 
 sandbox-serve: build
-	MEM_CONFIG=.sandbox/config.json ./$(BIN) serve
+	MEM_CONFIG=.sandbox/server/config.json ./$(BIN) serve
 
 sandbox-new: build
-	MEM_CONFIG=.sandbox/config.json ./$(BIN) new $(ARGS)
+	MEM_CONFIG=.sandbox/local/config.json ./$(BIN) new $(ARGS)
+
+sandbox-snap: build
+	MEM_CONFIG=.sandbox/local/config.json ./$(BIN) snap $(ARGS)
+
+sandbox-day: build
+	MEM_CONFIG=.sandbox/local/config.json ./$(BIN) day $(ARGS)
+
+sandbox-ls: build
+	MEM_CONFIG=.sandbox/local/config.json ./$(BIN) ls $(ARGS)
 
 sandbox-pull: build
-	MEM_CONFIG=.sandbox/config.json ./$(BIN) sync pull
+	MEM_CONFIG=.sandbox/local/config.json ./$(BIN) sync pull
 
 sandbox-push: build
-	MEM_CONFIG=.sandbox/config.json ./$(BIN) sync push
+	MEM_CONFIG=.sandbox/local/config.json ./$(BIN) sync push

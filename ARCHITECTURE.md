@@ -184,9 +184,9 @@ This is acceptable for a personal single-server tool.
 
 **Location:** `.sandbox/` in the repo root, gitignored.
 **Config:** `.sandbox/config.json` — points notes dir at `.sandbox/notes/`.
-**Usage:** `MEM_CONFIG=.sandbox/config.json ./mem-cli <command>` or `make sandbox-serve`.
+**Usage:** `MEM_CONFIG=.sandbox/config.json ./mem <command>` or `make sandbox-serve`.
 
-The sandbox's `notes/` directory is itself a git repo (separate from the mem-cli
+The sandbox's `notes/` directory is itself a git repo (separate from the mem
 repo). This mirrors production: the server's notes dir is always git-backed.
 
 To reset the sandbox: `rm .sandbox/notes/*.md`.
@@ -244,7 +244,7 @@ After=network.target
 [Service]
 Type=simple
 Environment=MEM_CONFIG=/etc/mem/config.json
-ExecStart=/usr/local/bin/mem-cli serve --addr 127.0.0.1:4747
+ExecStart=/usr/local/bin/mem serve --addr 127.0.0.1:4747
 Restart=on-failure
 
 [Install]

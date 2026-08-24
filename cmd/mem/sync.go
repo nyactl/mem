@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"mem-cli/internal/config"
-	"mem-cli/internal/synclient"
+	"mem/internal/config"
+	"mem/internal/synclient"
 
 	"github.com/spf13/cobra"
 )
