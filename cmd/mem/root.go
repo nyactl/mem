@@ -7,15 +7,15 @@ import (
 	"os/exec"
 	"strings"
 
-	"mem-cli/internal/config"
-	"mem-cli/internal/index"
-	"mem-cli/internal/note"
+	"mem/internal/config"
+	"mem/internal/index"
+	"mem/internal/note"
 
 	"github.com/spf13/cobra"
 )
 
 var root = &cobra.Command{
-	Use:          "mem-cli",
+	Use:          "mem",
 	Short:        "Shared external memory for human and AI",
 	SilenceUsage: true,
 }

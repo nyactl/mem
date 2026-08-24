@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"mem-cli/internal/config"
-	"mem-cli/internal/server"
+	"mem/internal/config"
+	"mem/internal/server"
 
 	"github.com/spf13/cobra"
 )

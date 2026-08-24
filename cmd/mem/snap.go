@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"mem-cli/internal/config"
-	"mem-cli/internal/index"
-	"mem-cli/internal/note"
+	"mem/internal/config"
+	"mem/internal/index"
+	"mem/internal/note"
 
 	"github.com/spf13/cobra"
 )
@@ -85,9 +85,9 @@ func stripInlineMarkers(s string) string {
 }
 
 func init() {
-	snapCmd.Flags().StringArrayVarP(&snapLabels, "label", "l", nil, "tag, repeatable")
+	snapCmd.Flags().StringArrayVarP(&snapLabels, "tag", "t", nil, "tag, repeatable")
 	snapCmd.Flags().StringArrayVarP(&snapSources, "source", "s", nil, "source, repeatable")
-	snapCmd.RegisterFlagCompletionFunc("label", tagCompleter)
+	snapCmd.RegisterFlagCompletionFunc("tag", tagCompleter)
 	snapCmd.RegisterFlagCompletionFunc("source", sourceCompleter)
 	root.AddCommand(snapCmd)
 }

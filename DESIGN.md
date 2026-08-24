@@ -1,4 +1,4 @@
-# mem-cli
+# mem
 
 Shared external memory for human and AI. Atomic notes for facts, findings,
 commands, and ideas — captured quickly, looked up fast.
@@ -125,7 +125,7 @@ nvim config (~20 lines) provides:
 Reads the index lazily — only when triggered, not on every keystroke. Uses
 `omnifunc` or a `nvim-cmp` custom source. No new mem commands needed — the
 index is the interface (P2, P8). The Lua snippet lives in nvim config, not
-in mem-cli.
+in mem.
 
 ---
 
@@ -248,7 +248,7 @@ Manually rebuild the index cache.
 - Plain `mem index` — rebuilds `~/.mem/notes/.mem-index.json` from scratch
 - `--embeddings` — additionally regenerates vectors for notes whose mtime is
   newer than their last-embedded timestamp in `~/.mem/notes/.mem-vectors.db`
-- Needed after external edits (AI writes, direct file edits outside mem-cli)
+- Needed after external edits (AI writes, direct file edits outside mem)
 - Automatic rebuild happens after every mem write command; this is the manual
   escape hatch
 
@@ -449,7 +449,7 @@ Unknown fields are ignored — forward compatibility.
 **`paperless-ngx-cli` attachment backend (future)** — uploads via
 paperless-ngx-cli, stores document ID or URL in frontmatter.
 
-mem-cli never reads attachment content — it only stores and displays the
+mem never reads attachment content — it only stores and displays the
 reference.
 
 ---
@@ -746,7 +746,7 @@ and F2 (from slug drift) are resolved by this model.
 Considered: keeping slugs as identity (simpler, but F1/F2 persist), UUIDs
 everywhere including prose (unreadable). Middle path: UUIDs in machine-managed
 frontmatter only; prose stays human-readable and is the durable layer if
-mem-cli disappears.
+mem disappears.
 
 ---
 
@@ -818,8 +818,8 @@ the primary store.
 At realistic personal scale (5k–20k notes, 3–5 captures/day over many years),
 flat files with ripgrep are fast enough for every operation. The more important
 reason is P2: an AI agent can read notes with nothing but filesystem access —
-no mem-cli process, no DB connection, no schema. Moving metadata into a DB
-would make mem-cli a required intermediary and break that guarantee.
+no mem process, no DB connection, no schema. Moving metadata into a DB
+would make mem a required intermediary and break that guarantee.
 
 The scalability problems that arise at large scale are solvable within the
 flat-file model: IDF weighting for `mem related` (this file), pre-filtered
@@ -866,7 +866,7 @@ without any annotation needed on `kafka-rebalance` itself.
 
 ## Binary
 
-- Binary: `mem-cli`
+- Binary: `mem`
 - Alias: `mem` in `~/.shared/aliases`
-- Module: `mem-cli`
-- Repo: `~/git/hub/mem-cli`
+- Module: `mem`
+- Repo: `~/git/hub/mem`
