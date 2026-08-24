@@ -73,10 +73,10 @@ mem append kafka-rebalance "Follow-up: confirmed fix works in staging. #resolved
 Appends as a new paragraph, runs the same finalization logic as `mem edit` —
 inline tags and from values extracted and merged into frontmatter.
 
-**Why this matters for P2 (shared external memory):** AI can already read notes
+**Why this matters for P2 (open by design):** any external tool can read notes
 via files and the index. But writing requires replicating finalization logic.
-`mem append` gives AI a clean, safe write interface: one command, no editor,
-same frontmatter guarantees as any human-driven edit.
+`mem append` gives external tools a clean, safe write interface: one command,
+no editor, same frontmatter guarantees as any interactive edit.
 
 ---
 
