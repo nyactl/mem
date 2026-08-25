@@ -126,6 +126,7 @@ type noteItem struct {
 	ID      string   `json:"id"`
 	Slug    string   `json:"slug"`
 	Created string   `json:"created"`
+	Date    string   `json:"date,omitempty"`
 	Tags    []string `json:"tags"`
 	Sources []string `json:"sources"`
 	ETag    string   `json:"etag"`
@@ -142,12 +143,14 @@ type createRequest struct {
 	Tags    []string `json:"tags"`
 	Sources []string `json:"sources"`
 	Created string   `json:"created"` // RFC3339 UTC; use client time for offline capture
+	Date    string   `json:"date,omitempty"`
 }
 
 type updateRequest struct {
 	Body    string   `json:"body"`
 	Tags    []string `json:"tags"`
 	Sources []string `json:"sources"`
+	Date    string   `json:"date,omitempty"`
 }
 
 type ingestRequest struct {
@@ -208,9 +211,15 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 
 	allTags := note.MergeTags(req.Tags, note.ExtractInlineTags(req.Body))
 	allSources := note.MergeSources(req.Sources, note.ExtractInlineSources(req.Body))
+	var createDate *time.Time
+	if req.Date != "" {
+		if d, err := time.Parse(time.RFC3339, req.Date); err == nil {
+			createDate = &d
+		}
+	}
 
 	path := filepath.Join(s.notesDir, note.Filename(ts, slug))
-	content := note.BuildFrontmatter(allTags, allSources, nil) + req.Body
+	content := note.BuildFrontmatter(allTags, allSources, nil, createDate) + req.Body
 	if err := note.WriteRaw(path, content); err != nil {
 		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
@@ -285,7 +294,15 @@ func (s *Server) updateNote(w http.ResponseWriter, r *http.Request, id string) {
 
 	allTags := note.MergeTags(req.Tags, note.ExtractInlineTags(req.Body))
 	allSources := note.MergeSources(req.Sources, note.ExtractInlineSources(req.Body))
-	content := note.BuildFrontmatter(allTags, allSources, n.Attachments) + req.Body
+	var updateDate *time.Time
+	if req.Date != "" {
+		if d, err := time.Parse(time.RFC3339, req.Date); err == nil {
+			updateDate = &d
+		}
+	} else {
+		updateDate = n.Date
+	}
+	content := note.BuildFrontmatter(allTags, allSources, n.Attachments, updateDate) + req.Body
 	if err := note.WriteRaw(n.Path, content); err != nil {
 		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
@@ -390,7 +407,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	allSources := note.MergeSources(req.From, note.ExtractInlineSources(req.Body)) // from → sources
 
 	path := filepath.Join(s.notesDir, note.Filename(ts, slug))
-	content := note.BuildFrontmatter(allTags, allSources, nil) + req.Body
+	content := note.BuildFrontmatter(allTags, allSources, nil, nil) + req.Body
 	if err := note.WriteRaw(path, content); err != nil {
 		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
@@ -418,7 +435,7 @@ func jsonWrite(w http.ResponseWriter, code int, v any) {
 func errBody(err error) map[string]string { return map[string]string{"error": err.Error()} }
 
 func toItem(n note.Note, etag string) noteItem {
-	return noteItem{
+	item := noteItem{
 		ID:      n.ID(),
 		Slug:    n.Slug,
 		Created: n.Created.UTC().Format(time.RFC3339),
@@ -426,6 +443,10 @@ func toItem(n note.Note, etag string) noteItem {
 		Sources: orEmpty(n.Sources),
 		ETag:    etag,
 	}
+	if n.Date != nil {
+		item.Date = n.Date.UTC().Format(time.RFC3339)
+	}
+	return item
 }
 
 func toDetail(n note.Note, etag string) noteDetail {
