@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"mem/internal/config"
@@ -40,11 +41,11 @@ as a timeline. Useful for reviewing what happened during a day.
 			return err
 		}
 
-		// note.List returns newest-first; reverse for chronological day view
+		// filter by DisplayTime so date: overrides are respected
 		var day []note.Note
-		for i := len(notes) - 1; i >= 0; i-- {
-			if notes[i].Created.Format("2006-01-02") == dateStr {
-				day = append(day, notes[i])
+		for _, n := range notes {
+			if n.DisplayTime().Format("2006-01-02") == dateStr {
+				day = append(day, n)
 			}
 		}
 
@@ -53,9 +54,24 @@ as a timeline. Useful for reviewing what happened during a day.
 			return nil
 		}
 
+		// sort chronologically; use Created as tiebreaker for same DisplayTime
+		sort.Slice(day, func(i, j int) bool {
+			di, dj := day[i].DisplayTime(), day[j].DisplayTime()
+			if di.Equal(dj) {
+				return day[i].Created.Before(day[j].Created)
+			}
+			return di.Before(dj)
+		})
+
 		fmt.Printf("── %s ─────────────────────────────────────\n", dateStr)
 		for _, n := range day {
-			timeStr := n.Created.Format("15:04:05")
+			dt := n.DisplayTime()
+			var timeStr string
+			if n.Date != nil && dt.Hour() == 0 && dt.Minute() == 0 && dt.Second() == 0 {
+				timeStr = "--:--   "
+			} else {
+				timeStr = dt.Format("15:04:05")
+			}
 			tags := ""
 			if len(n.Tags) > 0 {
 				tags = "  #" + joinStr(n.Tags, " #")

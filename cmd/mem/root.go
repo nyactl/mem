@@ -16,7 +16,7 @@ import (
 
 var root = &cobra.Command{
 	Use:          "mem",
-	Short:        "Shared external memory for human and AI",
+	Short:        "Atomic notes captured fast, found faster",
 	SilenceUsage: true,
 }
 

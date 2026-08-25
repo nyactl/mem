@@ -86,6 +86,7 @@ type remoteNote struct {
 	ID      string   `json:"id"`
 	Slug    string   `json:"slug"`
 	Created string   `json:"created"`
+	Date    string   `json:"date,omitempty"`
 	Tags    []string `json:"tags"`
 	Sources []string `json:"sources"`
 	Body    string   `json:"body"`
@@ -165,8 +166,8 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 // ── Push ──────────────────────────────────────────────────────────────────
 
 // Push uploads local notes that the server does not have or that differ
-// from the server's version.
-func (c *Client) Push() (created, updated int, conflicts []string, err error) {
+// from the server's version, and deletes remote notes that no longer exist locally.
+func (c *Client) Push() (created, updated, deleted int, conflicts []string, err error) {
 	local, err := note.List(c.dir)
 	if err != nil {
 		return
@@ -183,7 +184,10 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 		remoteByID[rn.ID] = rn
 	}
 
+	localIDs := make(map[string]bool, len(local))
 	for _, n := range local {
+		localIDs[n.ID()] = true
+
 		localETag, _ := note.ETag(n.Path)
 		rn, exists := remoteByID[n.ID()]
 
@@ -217,6 +221,23 @@ func (c *Client) Push() (created, updated int, conflicts []string, err error) {
 			state.Notes[n.ID()] = noteState{ServerETag: serverETag, LocalETag: localETag}
 		}
 		updated++
+	}
+
+	// Delete remote notes that were previously synced but no longer exist locally
+	for _, rn := range remote {
+		if localIDs[rn.ID] {
+			continue
+		}
+		if _, known := state.Notes[rn.ID]; !known {
+			// Never synced locally — don't touch it
+			continue
+		}
+		if delErr := c.deleteRemote(rn.ID); delErr != nil {
+			err = delErr
+			return
+		}
+		delete(state.Notes, rn.ID)
+		deleted++
 	}
 
 	c.saveState(state)
@@ -289,6 +310,9 @@ func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 		"sources": orEmpty(n.Sources),
 		"created": n.Created.UTC().Format(time.RFC3339),
 	}
+	if n.Date != nil {
+		payload["date"] = n.Date.UTC().Format(time.RFC3339)
+	}
 	resp, err := c.req(http.MethodPost, "/api/notes", payload, nil)
 	if err != nil {
 		return "", fmt.Errorf("push create %s: %w", n.ID(), err)
@@ -305,6 +329,19 @@ func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 	return result.ETag, nil
 }
 
+func (c *Client) deleteRemote(id string) error {
+	resp, err := c.req(http.MethodDelete, "/api/notes/"+url.PathEscape(id), nil, nil)
+	if err != nil {
+		return fmt.Errorf("push delete %s: %w", id, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("push delete %s: server returned %d: %s", id, resp.StatusCode, body)
+	}
+	return nil
+}
+
 func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag string, err error) {
 	raw, err := os.ReadFile(n.Path)
 	if err != nil {
@@ -315,6 +352,9 @@ func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag str
 		"body":    bodyText,
 		"tags":    orEmpty(n.Tags),
 		"sources": orEmpty(n.Sources),
+	}
+	if n.Date != nil {
+		payload["date"] = n.Date.UTC().Format(time.RFC3339)
 	}
 	resp, err := c.req(http.MethodPatch, "/api/notes/"+url.PathEscape(n.ID()), payload,
 		map[string]string{"If-Match": serverETag})
@@ -363,7 +403,13 @@ func (c *Client) writeLocal(rn remoteNote) error {
 	filename := note.Filename(ts, slug)
 	path := filepath.Join(c.dir, filename)
 
-	content := note.BuildFrontmatter(rn.Tags, rn.Sources, nil) + rn.Body
+	var date *time.Time
+	if rn.Date != "" {
+		if d, err := time.Parse(time.RFC3339, rn.Date); err == nil {
+			date = &d
+		}
+	}
+	content := note.BuildFrontmatter(rn.Tags, rn.Sources, nil, date) + rn.Body
 	return note.WriteRaw(path, content)
 }
 

@@ -55,12 +55,12 @@ var syncPushCmd = &cobra.Command{
 		}
 		c := synclient.New(cfg.ServerURL, cfg.AuthToken, cfg.NotesDir)
 		fmt.Fprintf(os.Stderr, "pushing to %s …\n", cfg.ServerURL)
-		created, updated, conflicts, err := c.Push()
+		created, updated, deleted, conflicts, err := c.Push()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "push complete: +%d new  ~%d updated  %d conflicts\n",
-			created, updated, len(conflicts))
+		fmt.Fprintf(os.Stderr, "push complete: +%d new  ~%d updated  -%d deleted  %d conflicts\n",
+			created, updated, deleted, len(conflicts))
 		for _, id := range conflicts {
 			fmt.Fprintf(os.Stderr, "  conflict: %s (server was modified concurrently — pull first)\n", id)
 		}

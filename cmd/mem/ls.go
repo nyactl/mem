@@ -14,11 +14,20 @@ import (
 var lsTag string
 
 var lsCmd = &cobra.Command{
-	Use:               "ls",
-	Short:             "Browse notes interactively via fzf",
-	ValidArgsFunction: cobra.NoFileCompletions,
+	Use:               "ls [<slug>]",
+	Short:             "Browse or view notes (fzf picker if no slug given)",
+	ValidArgsFunction: slugCompleter,
+	Args:              cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
+
+		if len(args) == 1 {
+			n, err := note.FindBySlug(cfg.NotesDir, args[0])
+			if err != nil {
+				return err
+			}
+			return viewFile(n.Path)
+		}
 
 		notes, err := note.List(cfg.NotesDir)
 		if err != nil {

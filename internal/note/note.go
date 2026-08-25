@@ -18,10 +18,20 @@ type Note struct {
 	Path        string
 	Slug        string
 	Created     time.Time
+	Date        *time.Time // frontmatter override; nil = use Created
 	Tags        []string
 	Sources     []string
 	Attachments []string
 	Body        string
+}
+
+// DisplayTime returns the canonical datetime for sorting and display.
+// It is Date if set in frontmatter, otherwise Created (from filename).
+func (n Note) DisplayTime() time.Time {
+	if n.Date != nil {
+		return *n.Date
+	}
+	return n.Created
 }
 
 // ID returns the unique note identifier: "{timestamp}-{slug}" — the filename
@@ -61,7 +71,7 @@ func Exists(path string) bool {
 	return err == nil
 }
 
-// Create writes a new note file with a heading prompt and returns its path.
+// Create writes a new blank note file and returns its path.
 // Frontmatter is not written — FinalizeNote generates it after the editor closes.
 func Create(dir string, ts time.Time, slug string) (string, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -71,10 +81,7 @@ func Create(dir string, ts time.Time, slug string) (string, error) {
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("note %q already exists — use: mem edit %s", slug, slug)
 	}
-	title := strings.ReplaceAll(slug, "-", " ")
-	title = strings.Title(title)
-	content := "# " + title + "\n\n"
-	return path, os.WriteFile(path, []byte(content), 0600)
+	return path, os.WriteFile(path, []byte(""), 0600)
 }
 
 // CreateDraft writes a blank note file and returns its path.
@@ -95,14 +102,14 @@ func StripFrontmatter(path string) (tags []string, sources []string, attachments
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	tags, sources, attachments, body := parseFrontmatter(string(data))
+	tags, sources, attachments, _, body := parseFrontmatter(string(data))
 	return tags, sources, attachments, os.WriteFile(path, []byte(body), 0600)
 }
 
 // FinalizeNote reads a note after editing, extracts inline #tags and @sources
-// from the body, merges with any extra metadata, writes frontmatter, and
-// renames the file if the first # Heading provides a better slug.
-// Returns the (possibly new) path.
+// from the body, merges with any extra metadata, and writes frontmatter.
+// The filename (and therefore the note ID) never changes.
+// Returns the path unchanged.
 func FinalizeNote(path string, extraTags []string, extraSources []string, extraAttachments []string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -113,7 +120,7 @@ func FinalizeNote(path string, extraTags []string, extraSources []string, extraA
 		return "", nil
 	}
 
-	tags, sources, attachments, body := parseFrontmatter(string(data))
+	tags, sources, attachments, date, body := parseFrontmatter(string(data))
 
 	tags = mergeTags(tags, extraTags)
 	tags = mergeTags(tags, extractInlineTags(body))
@@ -121,26 +128,9 @@ func FinalizeNote(path string, extraTags []string, extraSources []string, extraA
 	sources = mergeSources(sources, extractInlineSources(body))
 	attachments = append(attachments, extraAttachments...)
 
-	newSlug := extractHeading(body)
-	_, currentSlug, _ := parseFilename(filepath.Base(path))
-
-	targetSlug := currentSlug
-	if newSlug != "" {
-		targetSlug = newSlug
-	}
-
-	newContent := buildFrontmatter(tags, sources, attachments) + body
+	newContent := buildFrontmatter(tags, sources, attachments, date) + body
 	if err := os.WriteFile(path, []byte(newContent), 0600); err != nil {
 		return path, err
-	}
-
-	if targetSlug != currentSlug && targetSlug != "" {
-		ts, _, _ := parseFilename(filepath.Base(path))
-		newPath := filepath.Join(filepath.Dir(path), Filename(ts, targetSlug))
-		if err := os.Rename(path, newPath); err != nil {
-			return path, err
-		}
-		return newPath, nil
 	}
 	return path, nil
 }
@@ -148,8 +138,6 @@ func FinalizeNote(path string, extraTags []string, extraSources []string, extraA
 var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)
 
 var reInlineSource = regexp.MustCompile(`@([a-z][a-z0-9-]*)`)
-
-var reHeading = regexp.MustCompile(`(?m)^#\s+(.+)$`)
 
 // ExtractInlineTags extracts #tag mentions from body text.
 func ExtractInlineTags(body string) []string { return extractInlineTags(body) }
@@ -163,9 +151,19 @@ func MergeTags(a, b []string) []string { return mergeTags(a, b) }
 // MergeSources merges two source slices, deduplicating.
 func MergeSources(a, b []string) []string { return mergeSources(a, b) }
 
+// SetDate writes or updates the date: field in a note's frontmatter.
+func SetDate(path string, date *time.Time) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	tags, sources, attachments, _, body := parseFrontmatter(string(data))
+	return WriteRaw(path, buildFrontmatter(tags, sources, attachments, date)+body)
+}
+
 // BuildFrontmatter is the exported form of buildFrontmatter.
-func BuildFrontmatter(tags, sources, attachments []string) string {
-	return buildFrontmatter(tags, sources, attachments)
+func BuildFrontmatter(tags, sources, attachments []string, date *time.Time) string {
+	return buildFrontmatter(tags, sources, attachments, date)
 }
 
 // FormatTS formats a time as the note ID timestamp string.
@@ -197,14 +195,6 @@ func extractInlineSources(body string) []string {
 		}
 	}
 	return out
-}
-
-func extractHeading(body string) string {
-	m := reHeading.FindStringSubmatch(body)
-	if m == nil {
-		return ""
-	}
-	return Slugify(m[1])
 }
 
 func mergeTags(existing, extra []string) []string {
@@ -241,11 +231,12 @@ func Parse(path string) (Note, error) {
 	if err != nil {
 		return Note{}, err
 	}
-	tags, sources, attachments, body := parseFrontmatter(string(data))
+	tags, sources, attachments, date, body := parseFrontmatter(string(data))
 	return Note{
 		Path:        path,
 		Slug:        slug,
 		Created:     ts,
+		Date:        date,
 		Tags:        tags,
 		Sources:     sources,
 		Attachments: attachments,
@@ -274,7 +265,7 @@ func List(dir string) ([]Note, error) {
 		notes = append(notes, n)
 	}
 	sort.Slice(notes, func(i, j int) bool {
-		return notes[i].Created.After(notes[j].Created)
+		return notes[i].DisplayTime().After(notes[j].DisplayTime())
 	})
 	return notes, nil
 }
@@ -300,9 +291,9 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	if err != nil {
 		return err
 	}
-	tags, sources, existing, body := parseFrontmatter(string(data))
+	tags, sources, existing, date, body := parseFrontmatter(string(data))
 	merged := append(existing, newAttachments...)
-	content := buildFrontmatter(tags, sources, merged) + body + "\n"
+	content := buildFrontmatter(tags, sources, merged, date) + body + "\n"
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
@@ -385,9 +376,12 @@ func parseFilename(base string) (time.Time, string, error) {
 	return ts, base[16:], nil
 }
 
-func buildFrontmatter(tags []string, sources []string, attachments []string) string {
+func buildFrontmatter(tags []string, sources []string, attachments []string, date *time.Time) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
+	if date != nil {
+		sb.WriteString("date: " + date.Format(time.RFC3339) + "\n")
+	}
 	if len(tags) > 0 {
 		sb.WriteString("tags: [" + strings.Join(tags, ", ") + "]\n")
 	} else {
@@ -403,7 +397,7 @@ func buildFrontmatter(tags []string, sources []string, attachments []string) str
 	return sb.String()
 }
 
-func parseFrontmatter(content string) (tags []string, sources []string, attachments []string, body string) {
+func parseFrontmatter(content string) (tags []string, sources []string, attachments []string, date *time.Time, body string) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	inFM, first, afterFM := false, true, false
 	var bodyLines []string
@@ -431,13 +425,17 @@ func parseFrontmatter(content string) (tags []string, sources []string, attachme
 			} else if strings.HasPrefix(line, "sources:") {
 				sources = parseInlineList(line)
 			} else if strings.HasPrefix(line, "source:") {
-				// backwards compat: migrate single source to list
 				s := Slugify(strings.TrimSpace(strings.TrimPrefix(line, "source:")))
 				if s != "" {
 					sources = []string{s}
 				}
 			} else if strings.HasPrefix(line, "attachments:") {
 				attachments = parseInlineList(line)
+			} else if strings.HasPrefix(line, "date:") {
+				raw := strings.TrimSpace(strings.TrimPrefix(line, "date:"))
+				if t := parseDateTime(raw); t != nil {
+					date = t
+				}
 			}
 		} else if afterFM {
 			bodyLines = append(bodyLines, line)
@@ -445,6 +443,24 @@ func parseFrontmatter(content string) (tags []string, sources []string, attachme
 	}
 	body = strings.Join(bodyLines, "\n")
 	return
+}
+
+var dateFormats = []string{
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04",
+	"2006-01-02 15:04:05",
+	"2006-01-02 15:04",
+	"2006-01-02",
+}
+
+func parseDateTime(s string) *time.Time {
+	for _, layout := range dateFormats {
+		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
+			return &t
+		}
+	}
+	return nil
 }
 
 func parseInlineList(line string) []string {
