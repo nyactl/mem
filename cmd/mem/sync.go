@@ -12,14 +12,41 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Sync notes with the central mem serve instance",
-	Long: `sync has two sub-commands:
+	Short: "Sync notes with the mem serve instance (pull then push)",
+	Long: `Pulls new and changed notes from the server, then pushes local changes back.
+Run pull or push individually to control direction.
 
-  mem sync pull   download new/changed notes from the server
-  mem sync push   upload local notes to the server
+Requires server_url in config (or MEM_CONFIG env var).`,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		cfg := config.Load()
+		if cfg.ServerURL == "" {
+			return fmt.Errorf("server_url is not set in config — add it to point at your mem serve instance")
+		}
+		c := synclient.New(cfg.ServerURL, cfg.AuthToken, cfg.NotesDir)
 
-Requires server_url set in config (or MEM_CONFIG env).
-If auth_token is set it is sent as a Bearer token.`,
+		fmt.Fprintf(os.Stderr, "pulling from %s …\n", cfg.ServerURL)
+		created, updated, conflicts, err := c.Pull()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "pull: +%d new  ~%d updated  %d conflicts\n",
+			created, updated, len(conflicts))
+		for _, id := range conflicts {
+			fmt.Fprintf(os.Stderr, "  conflict: %s (both sides changed — resolve manually)\n", id)
+		}
+
+		fmt.Fprintf(os.Stderr, "pushing …\n")
+		pcreated, pupdated, pdeleted, pconflicts, err := c.Push()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "push: +%d new  ~%d updated  -%d deleted  %d conflicts\n",
+			pcreated, pupdated, pdeleted, len(pconflicts))
+		for _, id := range pconflicts {
+			fmt.Fprintf(os.Stderr, "  conflict: %s (server modified concurrently — pull first)\n", id)
+		}
+		return nil
+	},
 }
 
 var syncPullCmd = &cobra.Command{
@@ -39,7 +66,7 @@ var syncPullCmd = &cobra.Command{
 		fmt.Fprintf(os.Stderr, "pull complete: +%d new  ~%d updated  %d conflicts\n",
 			created, updated, len(conflicts))
 		for _, id := range conflicts {
-			fmt.Fprintf(os.Stderr, "  conflict: %s (both local and remote changed — resolve manually)\n", id)
+			fmt.Fprintf(os.Stderr, "  conflict: %s (both sides changed — resolve manually)\n", id)
 		}
 		return nil
 	},
@@ -62,7 +89,7 @@ var syncPushCmd = &cobra.Command{
 		fmt.Fprintf(os.Stderr, "push complete: +%d new  ~%d updated  -%d deleted  %d conflicts\n",
 			created, updated, deleted, len(conflicts))
 		for _, id := range conflicts {
-			fmt.Fprintf(os.Stderr, "  conflict: %s (server was modified concurrently — pull first)\n", id)
+			fmt.Fprintf(os.Stderr, "  conflict: %s (server modified concurrently — pull first)\n", id)
 		}
 		return nil
 	},
