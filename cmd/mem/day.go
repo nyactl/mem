@@ -14,12 +14,15 @@ import (
 
 var dayCmd = &cobra.Command{
 	Use:   "day [YYYY-MM-DD]",
-	Short: "List all notes from a given day (default today)",
-	Long: `Prints every note from the given day in chronological order — oldest first,
-as a timeline. Useful for reviewing what happened during a day.
+	Short: "List notes from a given day, chronologically (default today)",
+	Long: `Prints every note whose display date matches the given day, oldest first.
 
-  mem day            # today
-  mem day 2026-08-14 # specific date`,
+The display date is the date: frontmatter field if set, otherwise the capture
+timestamp in the filename. Use -d when capturing something that happened in the
+past — mem day will file it under the day it actually occurred.
+
+  mem day                    # today
+  mem day 2026-08-14         # specific date`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg := config.Load()
