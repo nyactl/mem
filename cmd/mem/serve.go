@@ -13,10 +13,10 @@ var serveAddr string
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Start the mem server (PWA + REST sync API)",
+	Short: "Start the mem server (web UI + REST sync API)",
 	Long: `serve starts an HTTP server that:
 
-  · hosts the embedded PWA at http://<addr>/
+  · hosts the web UI at http://<addr>/
   · exposes a REST API at /api/notes for sync clients
   · commits every write to git in the notes directory
 

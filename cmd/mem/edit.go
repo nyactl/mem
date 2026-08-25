@@ -10,7 +10,7 @@ import (
 
 var editCmd = &cobra.Command{
 	Use:               "edit [<slug>]",
-	Short:             "Open a note in $EDITOR (fzf picker if no slug given)",
+	Short:             "Edit a note's body in $EDITOR (fzf picker if no slug given)",
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: slugCompleter,
 	RunE: func(cmd *cobra.Command, args []string) error {
