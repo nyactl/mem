@@ -4,7 +4,9 @@
   import DOMPurify from 'dompurify'
   import { onMount, tick } from 'svelte'
 
-  let { onsave, oncancel } = $props()
+  let { id = null, onsave, oncancel } = $props()
+
+  let isEdit = $derived(id !== null)
 
   let title      = $state('')
   let tagsRaw    = $state('')
@@ -12,10 +14,12 @@
   let body       = $state('')
   let tab        = $state('write')
   let saving     = $state(false)
+  let loading    = $state(false)
   let error      = $state('')
+  let etag       = $state('')
   let allTags    = $state([])
   let tagFocus   = $state(false)
-  let accelIdx   = $state(-1)   // highlighted suggestion index
+  let accelIdx   = $state(-1)
   let tagsEl     = $state(null)
 
   onMount(async () => {
@@ -27,6 +31,25 @@
           counts.set(t, (counts.get(t) || 0) + 1)
       allTags = [...counts.entries()].sort((a,b) => b[1]-a[1]).map(([t]) => t)
     } catch {}
+
+    if (id) {
+      loading = true
+      try {
+        const n = await api.note(id)
+        title   = n.slug || n.id || ''
+        body    = n.body || ''
+        tagsRaw = (n.tags || []).join(' ')
+        etag    = n.etag || ''
+        if (n.date) {
+          const d = new Date(n.date)
+          dateRaw = d.toISOString().slice(0, 16)
+        }
+      } catch (e) {
+        error = e.message
+      } finally {
+        loading = false
+      }
+    }
   })
 
   // The word currently being typed in the tags field
@@ -101,20 +124,27 @@
   }
 
   async function save() {
-    const slug = title.trim()
-    if (!slug) { error = 'Title is required.'; return }
     saving = true; error = ''
     try {
-      const payload = {
-        title:   slug,
-        body,
-        tags:    parseTags(tagsRaw),
-        sources: [],
-        created: new Date().toISOString(),
+      if (isEdit) {
+        const payload = { body, tags: parseTags(tagsRaw), sources: [] }
+        if (dateRaw.trim()) payload.date = new Date(dateRaw).toISOString()
+        await api.update(id, payload, etag)
+        onsave(id)
+      } else {
+        const slug = title.trim()
+        if (!slug) { error = 'Title is required.'; saving = false; return }
+        const payload = {
+          title:   slug,
+          body,
+          tags:    parseTags(tagsRaw),
+          sources: [],
+          created: new Date().toISOString(),
+        }
+        if (dateRaw.trim()) payload.date = new Date(dateRaw).toISOString()
+        const note = await api.create(payload)
+        onsave(note.id)
       }
-      if (dateRaw.trim()) payload.date = new Date(dateRaw).toISOString()
-      const note = await api.create(payload)
-      onsave(note.id)
     } catch (e) {
       error = e.message
     } finally {
@@ -147,23 +177,27 @@
 <div class="shell" role="none">
   <header>
     <button class="back" onclick={oncancel}>← back</button>
-    <span class="heading">new note</span>
+    <span class="heading">{isEdit ? 'edit note' : 'new note'}</span>
     <div class="spacer"></div>
     {#if error}<span class="err">{error}</span>{/if}
-    <button class="save-btn" onclick={save} disabled={saving}>
+    <button class="save-btn" onclick={save} disabled={saving || loading}>
       {saving ? 'saving…' : 'save'}
     </button>
   </header>
 
   <main>
-    <input
-      class="title-input"
-      type="text"
-      placeholder="title"
-      bind:value={title}
-      autocomplete="off"
-      spellcheck="false"
-    />
+    {#if isEdit}
+      <span class="slug-label">{title}</span>
+    {:else}
+      <input
+        class="title-input"
+        type="text"
+        placeholder="title"
+        bind:value={title}
+        autocomplete="off"
+        spellcheck="false"
+      />
+    {/if}
 
     <input
       class="date-input"
@@ -266,6 +300,16 @@
     color-scheme: dark light;
   }
   .date-input:focus { outline: none; border-bottom-color: var(--accent) }
+
+  .slug-label {
+    display: block;
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--accent);
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+  }
 
   .title-input, .tags-input {
     background: transparent; border: none;
