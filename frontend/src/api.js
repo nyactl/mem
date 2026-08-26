@@ -12,8 +12,8 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-async function req(method, path, body) {
-  const headers = { 'Authorization': 'Bearer ' + getToken() }
+async function req(method, path, body, extraHeaders = {}) {
+  const headers = { 'Authorization': 'Bearer ' + getToken(), ...extraHeaders }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const res = await fetch(path, {
     method,
@@ -29,8 +29,9 @@ async function req(method, path, body) {
 }
 
 export const api = {
-  notes: ()         => req('GET',   '/api/notes'),
-  note:  (id)       => req('GET',   `/api/notes/${encodeURIComponent(id)}`),
-  create: (payload) => req('POST',  '/api/notes', payload),
-  update: (id, payload) => req('PATCH', `/api/notes/${encodeURIComponent(id)}`, payload),
+  notes: ()                    => req('GET',   '/api/notes'),
+  note:  (id)                  => req('GET',   `/api/notes/${encodeURIComponent(id)}`),
+  create: (payload)            => req('POST',  '/api/notes', payload),
+  update: (id, payload, etag)  => req('PATCH', `/api/notes/${encodeURIComponent(id)}`, payload,
+                                       etag ? { 'If-Match': etag } : {}),
 }

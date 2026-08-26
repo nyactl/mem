@@ -4,7 +4,7 @@
   import DOMPurify from 'dompurify'
   import { tick } from 'svelte'
 
-  let { id, onback, theme, toggleTheme } = $props()
+  let { id, onback, onedit, theme, toggleTheme } = $props()
   let isDark = $derived(theme !== 'light')
 
   let note    = $state(null)
@@ -70,6 +70,9 @@
       <span class="slug">{note.slug}</span>
     {/if}
     <div class="spacer"></div>
+    {#if note}
+      <button class="action" onclick={onedit} aria-label="edit note">edit</button>
+    {/if}
     <button class="action" class:active={raw} onclick={() => raw = !raw} aria-label="toggle raw">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <polyline points="5,4 1,8 5,12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

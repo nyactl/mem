@@ -34,6 +34,9 @@
 
   function parseHash(h) {
     const s = h.replace(/^#\/?/, '')
+    if (s.startsWith('note/') && s.endsWith('/edit')) {
+      return { name: 'edit', id: decodeURIComponent(s.slice(5, -5)) }
+    }
     if (s.startsWith('note/')) return { name: 'detail', id: decodeURIComponent(s.slice(5)) }
     if (s === 'new') return { name: 'new' }
     return { name: 'list' }
@@ -75,8 +78,15 @@
   <NoteDetail
     id={view.id}
     onback={() => navigate('/')}
+    onedit={() => navigate(`/note/${encodeURIComponent(view.id)}/edit`)}
     {theme}
     {toggleTheme}
+  />
+{:else if view.name === 'edit'}
+  <NoteEditor
+    id={view.id}
+    onsave={(id) => navigate(id ? `/note/${encodeURIComponent(id)}` : '/')}
+    oncancel={() => navigate(`/note/${encodeURIComponent(view.id)}`)}
   />
 {:else if view.name === 'new'}
   <NoteEditor
