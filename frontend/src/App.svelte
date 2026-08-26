@@ -79,6 +79,7 @@
     id={view.id}
     onback={() => navigate('/')}
     onedit={() => navigate(`/note/${encodeURIComponent(view.id)}/edit`)}
+    ondelete={() => navigate('/')}
     {theme}
     {toggleTheme}
   />

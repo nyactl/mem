@@ -4,14 +4,29 @@
   import DOMPurify from 'dompurify'
   import { tick } from 'svelte'
 
-  let { id, onback, onedit, theme, toggleTheme } = $props()
+  let { id, onback, onedit, ondelete, theme, toggleTheme } = $props()
   let isDark = $derived(theme !== 'light')
 
-  let note    = $state(null)
-  let loading = $state(true)
-  let error   = $state('')
-  let raw     = $state(false)
-  let bodyEl  = $state(null)
+  let note      = $state(null)
+  let loading   = $state(true)
+  let error     = $state('')
+  let raw       = $state(false)
+  let bodyEl    = $state(null)
+  let confirmDel = $state(false)
+  let deleting  = $state(false)
+
+  async function deleteNote() {
+    if (!confirmDel) { confirmDel = true; return }
+    deleting = true
+    try {
+      await api.delete(id)
+      ondelete?.()
+    } catch (e) {
+      error = e.message
+      deleting = false
+      confirmDel = false
+    }
+  }
 
   marked.use({
     breaks: true,
@@ -71,6 +86,14 @@
     {/if}
     <div class="spacer"></div>
     {#if note}
+      <button
+        class="action"
+        class:danger={confirmDel}
+        onclick={deleteNote}
+        disabled={deleting}
+        aria-label="delete note"
+        onblur={() => { confirmDel = false }}
+      >{deleting ? 'deleting…' : confirmDel ? 'sure?' : 'delete'}</button>
       <button class="action" onclick={onedit} aria-label="edit note">edit</button>
     {/if}
     <button class="action" class:active={raw} onclick={() => raw = !raw} aria-label="toggle raw">
@@ -147,6 +170,8 @@
   }
   .action:hover { color: var(--text); border-color: var(--muted) }
   .action.active { color: var(--accent); border-color: var(--accent) }
+  .action.danger { color: #f85149; border-color: #f85149 }
+  .action:disabled { opacity: 0.5; cursor: default }
   .icon-btn { display: flex; align-items: center; justify-content: center; padding: 0.3rem }
   .slug { color: var(--accent); font-size: 0.9rem; font-weight: 600; letter-spacing: 0.05em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 
