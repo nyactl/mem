@@ -32,6 +32,7 @@ export const api = {
   notes: ()                    => req('GET',   '/api/notes'),
   note:  (id)                  => req('GET',   `/api/notes/${encodeURIComponent(id)}`),
   create: (payload)            => req('POST',  '/api/notes', payload),
-  update: (id, payload, etag)  => req('PATCH', `/api/notes/${encodeURIComponent(id)}`, payload,
+  update: (id, payload, etag)  => req('PATCH',  `/api/notes/${encodeURIComponent(id)}`, payload,
                                        etag ? { 'If-Match': etag } : {}),
+  delete: (id)                 => req('DELETE', `/api/notes/${encodeURIComponent(id)}`),
 }
