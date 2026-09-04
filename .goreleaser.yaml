@@ -2,7 +2,7 @@ version: 2
 
 builds:
   - id: mem
-    main: ./cmd/mem-cli
+    main: ./cmd/mem
     binary: mem
     env:
       - CGO_ENABLED=0
@@ -37,7 +37,7 @@ signs:
 
 nfpms:
   - package_name: mem
-    homepage: "https://github.com/nyactl/mem-cli"
+    homepage: "https://github.com/nyactl/mem"
     maintainer: "nyactl <noreply@github.com>"
     description: "Fast, atomic notes in plain Markdown. Yours forever."
     license: MIT
@@ -54,7 +54,7 @@ brews:
       owner: nyactl
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/nyactl/mem-cli"
+    homepage: "https://github.com/nyactl/mem"
     description: "Fast, atomic notes in plain Markdown. Yours forever."
     license: "MIT"
     install: |
