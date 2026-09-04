@@ -2,3 +2,4 @@
 /mem
 .sandbox/
 frontend/node_modules/
+coverage.out
