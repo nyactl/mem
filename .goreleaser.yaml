@@ -1,0 +1,72 @@
+version: 2
+
+builds:
+  - id: mem
+    main: ./cmd/mem-cli
+    binary: mem
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    name_template: "mem_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - --yes
+    artifacts: checksum
+
+nfpms:
+  - package_name: mem
+    homepage: "https://github.com/nyactl/mem-cli"
+    maintainer: "nyactl <noreply@github.com>"
+    description: "Fast, atomic notes in plain Markdown. Yours forever."
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
+brews:
+  - name: mem
+    directory: Formula
+    skip_upload: auto
+    repository:
+      owner: nyactl
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/nyactl/mem-cli"
+    description: "Fast, atomic notes in plain Markdown. Yours forever."
+    license: "MIT"
+    install: |
+      bin.install "mem"
+    test: |
+      system "#{bin}/mem", "--version"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^design:"
