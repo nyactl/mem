@@ -14,9 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 var root = &cobra.Command{
 	Use:          "mem",
 	Short:        "Atomic notes captured fast, found faster",
+	Version:      version,
 	SilenceUsage: true,
 }
 
