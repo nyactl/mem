@@ -1,0 +1,10 @@
+.git
+.github
+.sandbox
+.claude
+frontend/node_modules
+internal/web/dist
+/mem
+/mem-cli
+coverage.out
+*.md
