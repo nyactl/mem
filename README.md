@@ -144,7 +144,7 @@ Verify an image before running it:
 
 ```sh
 cosign verify ghcr.io/nyactl/mem:<version> \
-  --certificate-identity-regexp '^https://github.com/nyactl/mem/' \
+  --certificate-identity "https://github.com/nyactl/mem/.github/workflows/container.yml@refs/tags/v<version>" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
