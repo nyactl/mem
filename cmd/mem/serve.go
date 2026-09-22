@@ -22,9 +22,10 @@ var serveCmd = &cobra.Command{
 
 The notes directory is initialised as a git repository on first run.
 
-Configuration (config.json or MEM_CONFIG env):
-  listen_addr  server address          (default ":4747")
-  auth_token   bearer token for auth   (default: none — no auth)
+Configuration (config.json or MEM_CONFIG env; MEM_* variables override it):
+  listen_addr  MEM_LISTEN_ADDR  server address         (default ":4747")
+  auth_token   MEM_AUTH_TOKEN   bearer token for auth  (default: none — no auth)
+  notes_dir    MEM_NOTES_DIR    notes directory        (default ~/.mem/notes)
 
 Run behind a reverse proxy with TLS for remote access.`,
 	RunE: func(cmd *cobra.Command, args []string) error {

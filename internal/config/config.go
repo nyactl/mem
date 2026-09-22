@@ -30,6 +30,7 @@ func Load() Config {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		applyEnv(&cfg)
 		return cfg
 	}
 	_ = json.Unmarshal(data, &cfg)
@@ -44,7 +45,24 @@ func Load() Config {
 	if cfg.ListenAddr == "" {
 		cfg.ListenAddr = d.ListenAddr
 	}
+	applyEnv(&cfg)
 	return cfg
+}
+
+// applyEnv lets MEM_* environment variables override the file, so containers
+// and shells can supply paths and the auth token without writing them to disk.
+func applyEnv(cfg *Config) {
+	for key, field := range map[string]*string{
+		"MEM_NOTES_DIR":       &cfg.NotesDir,
+		"MEM_ATTACHMENTS_DIR": &cfg.AttachmentsDir,
+		"MEM_LISTEN_ADDR":     &cfg.ListenAddr,
+		"MEM_AUTH_TOKEN":      &cfg.AuthToken,
+		"MEM_SERVER_URL":      &cfg.ServerURL,
+	} {
+		if v := os.Getenv(key); v != "" {
+			*field = v
+		}
+	}
 }
 
 func defaults() Config {
