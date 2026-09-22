@@ -68,10 +68,10 @@ jobs:
             http://127.0.0.1:4747/api/notes
           curl -fsS -H 'Authorization: Bearer ci-token' http://127.0.0.1:4747/api/notes | grep -q smoke-test
           for i in $(seq 10); do
-            git -c safe.directory='*' -C "$notes" log --oneline 2>/dev/null | grep -q . && break
+            sudo git -c safe.directory='*' -C "$notes" log --oneline 2>/dev/null | grep -q . && break
             sleep 1
           done
-          git -c safe.directory='*' -C "$notes" log --oneline | grep -q .
+          sudo git -c safe.directory='*' -C "$notes" log --oneline | grep -q .
 
       - name: Smoke test logs
         if: failure()
