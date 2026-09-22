@@ -124,6 +124,36 @@ Attach one or more files to an existing note.
 
 ---
 
+## Server
+
+`mem serve` hosts the web UI and the sync API; `mem sync` on each device
+pulls and pushes against it. A signed image is published for every release:
+
+```sh
+docker run -d -p 4747:4747 \
+  -e MEM_AUTH_TOKEN="$(openssl rand -hex 32)" \
+  -v /srv/mem/notes:/data/notes \
+  ghcr.io/nyactl/mem:<version>
+```
+
+The notes directory must be owned by uid 1000. Every write is committed to git
+in that directory. Put a TLS reverse proxy in front for anything beyond
+localhost.
+
+Verify an image before running it:
+
+```sh
+cosign verify ghcr.io/nyactl/mem:<version> \
+  --certificate-identity-regexp '^https://github.com/nyactl/mem/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Configuration comes from `config.json`, overridden by `MEM_NOTES_DIR`,
+`MEM_ATTACHMENTS_DIR`, `MEM_LISTEN_ADDR`, `MEM_AUTH_TOKEN` and
+`MEM_SERVER_URL`. Prefer the variables for the token so it never lands in a file.
+
+---
+
 ## Tag backend
 
 Tags are presented as mem's own. Source is configurable in
