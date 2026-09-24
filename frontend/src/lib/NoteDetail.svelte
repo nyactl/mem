@@ -61,7 +61,9 @@
     if (!nodes?.length) return
     const mermaidTheme = isDark ? 'dark' : 'neutral'
     const { default: mermaid } = await import('mermaid')
-    mermaid.initialize({ startOnLoad: false, theme: mermaidTheme })
+    // mermaid 12 made ELK the default layout and shipped a new look; both
+    // re-render existing diagrams differently. Pin the previous ones.
+    mermaid.initialize({ startOnLoad: false, theme: mermaidTheme, layout: 'dagre', look: 'classic' })
     nodes.forEach(n => { n.removeAttribute('data-processed'); n.innerHTML = n.textContent ?? '' })
     mermaid.run({ nodes })
   }
