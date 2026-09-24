@@ -5,6 +5,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # The build stage deliberately tracks the Node LTS line. Digest and minor
+      # updates still land; moving to the next major is a decision, not a bump.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: gomod
     directory: /
     schedule:
