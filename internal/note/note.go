@@ -380,7 +380,10 @@ func buildFrontmatter(tags []string, sources []string, attachments []string, dat
 	var sb strings.Builder
 	sb.WriteString("---\n")
 	if date != nil {
-		sb.WriteString("date: " + date.Format(time.RFC3339) + "\n")
+		// Always UTC: the same note written on hosts in different zones must
+		// produce identical bytes, or sync sees a change that is not one and
+		// re-pushes the note on every run.
+		sb.WriteString("date: " + date.UTC().Format(time.RFC3339) + "\n")
 	}
 	if len(tags) > 0 {
 		sb.WriteString("tags: [" + strings.Join(tags, ", ") + "]\n")
@@ -457,7 +460,10 @@ var dateFormats = []string{
 func parseDateTime(s string) *time.Time {
 	for _, layout := range dateFormats {
 		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
-			return &t
+			// Stored UTC, shown local: a date of 2026-09-21 written here is
+			// 2026-09-20T22:00:00Z on disk, and must still read as the 21st.
+			local := t.Local()
+			return &local
 		}
 	}
 	return nil
