@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.1] - 2026-09-30
+
+### Bug Fixes
+
+- Keep dagre layout and classic look after the mermaid 12 upgrade
+- Store note dates in utc so they survive sync unchanged
+
+### CI
+
+- Add a temporary tap token check
+- Drop the temporary tap token check
+- Keep the node base image on the lts line
+
+### Documentation
+
+- Verify images against the exact signing workflow and tag
+
+
 ## [0.2.0] - 2026-09-22
 
 ### Bug Fixes
