@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.2] - 2026-10-01
+
+### Bug Fixes
+
+- Override lodash-es to a patched version across the tree (#12)
+- Name the cause when the server rejects a sync
+
+### Documentation
+
+- List the config mem sync consults in its help
+
+
 ## [0.2.1] - 2026-09-30
 
 ### Bug Fixes
