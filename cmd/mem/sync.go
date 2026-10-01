@@ -16,7 +16,10 @@ var syncCmd = &cobra.Command{
 	Long: `Pulls new and changed notes from the server, then pushes local changes back.
 Run pull or push individually to control direction.
 
-Requires server_url in config (or MEM_CONFIG env var).`,
+Configuration (config.json or MEM_CONFIG env; MEM_* variables override it):
+  server_url   MEM_SERVER_URL   mem serve instance to sync with (required)
+  auth_token   MEM_AUTH_TOKEN   bearer token, if the server requires one
+  notes_dir    MEM_NOTES_DIR    notes directory        (default ~/.mem/notes)`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := config.Load()
 		if cfg.ServerURL == "" {
