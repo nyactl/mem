@@ -246,6 +246,30 @@ func (c *Client) Push() (created, updated, deleted int, conflicts []string, err 
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────
 
+// statusError turns a non-success response into something the user can act on.
+// 401 and 403 have one cause each for a sync client -- a missing or wrong token
+// -- and the client knows which, because it knows whether one was configured.
+// Every status check goes through here so pull, push and single-note fetches
+// all fail the same readable way.
+func (c *Client) statusError(op string, resp *http.Response) error {
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		if c.token == "" {
+			return fmt.Errorf("%s: the server requires a bearer token (%d) but no auth_token is configured — set auth_token in the config file, or MEM_AUTH_TOKEN in the environment",
+				op, resp.StatusCode)
+		}
+		return fmt.Errorf("%s: the server rejected the configured auth_token (%d) — check it matches the server's auth_token",
+			op, resp.StatusCode)
+	default:
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			return fmt.Errorf("%s: server returned %d", op, resp.StatusCode)
+		}
+		return fmt.Errorf("%s: server returned %d: %s", op, resp.StatusCode, msg)
+	}
+}
+
 func (c *Client) req(method, path string, body any, extra map[string]string) (*http.Response, error) {
 	var r io.Reader
 	if body != nil {
@@ -278,7 +302,7 @@ func (c *Client) listRemote() ([]remoteNote, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list remote: server returned %d", resp.StatusCode)
+		return nil, c.statusError("list remote", resp)
 	}
 	var notes []remoteNote
 	return notes, json.NewDecoder(resp.Body).Decode(&notes)
@@ -291,7 +315,7 @@ func (c *Client) getRemote(id string) (remoteNote, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return remoteNote{}, fmt.Errorf("get remote %s: server returned %d", id, resp.StatusCode)
+		return remoteNote{}, c.statusError("get remote "+id, resp)
 	}
 	var n remoteNote
 	return n, json.NewDecoder(resp.Body).Decode(&n)
@@ -319,8 +343,7 @@ func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("push create %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
+		return "", c.statusError("push create "+n.ID(), resp)
 	}
 	var result remoteNote
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -336,8 +359,7 @@ func (c *Client) deleteRemote(id string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("push delete %s: server returned %d: %s", id, resp.StatusCode, body)
+		return c.statusError("push delete "+id, resp)
 	}
 	return nil
 }
@@ -366,8 +388,7 @@ func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag str
 		return "", conflictErr(n.ID())
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("push update %s: server returned %d: %s", n.ID(), resp.StatusCode, body)
+		return "", c.statusError("push update "+n.ID(), resp)
 	}
 	var result remoteNote
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
