@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"mem/internal/auth"
 	"mem/internal/config"
 	"mem/internal/synclient"
 
@@ -18,14 +19,17 @@ Run pull or push individually to control direction.
 
 Configuration (config.json or MEM_CONFIG env; MEM_* variables override it):
   server_url   MEM_SERVER_URL   mem serve instance to sync with (required)
-  auth_token   MEM_AUTH_TOKEN   bearer token, if the server requires one
-  notes_dir    MEM_NOTES_DIR    notes directory        (default ~/.mem/notes)`,
+  notes_dir    MEM_NOTES_DIR    notes directory        (default ~/.mem/notes)
+
+The bearer token comes from MEM_AUTH_TOKEN or the system keychain — see
+mem auth. It is never read from the config file.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := config.Load()
 		if cfg.ServerURL == "" {
 			return fmt.Errorf("server_url is not set in config — add it to point at your mem serve instance")
 		}
-		c := synclient.New(cfg.ServerURL, cfg.AuthToken, cfg.NotesDir)
+		token, _ := auth.Token()
+		c := synclient.New(cfg.ServerURL, token, cfg.NotesDir)
 
 		fmt.Fprintf(os.Stderr, "pulling from %s …\n", cfg.ServerURL)
 		created, updated, conflicts, err := c.Pull()
@@ -60,7 +64,8 @@ var syncPullCmd = &cobra.Command{
 		if cfg.ServerURL == "" {
 			return fmt.Errorf("server_url is not set in config — add it to point at your mem serve instance")
 		}
-		c := synclient.New(cfg.ServerURL, cfg.AuthToken, cfg.NotesDir)
+		token, _ := auth.Token()
+		c := synclient.New(cfg.ServerURL, token, cfg.NotesDir)
 		fmt.Fprintf(os.Stderr, "pulling from %s …\n", cfg.ServerURL)
 		created, updated, conflicts, err := c.Pull()
 		if err != nil {
@@ -83,7 +88,8 @@ var syncPushCmd = &cobra.Command{
 		if cfg.ServerURL == "" {
 			return fmt.Errorf("server_url is not set in config — add it to point at your mem serve instance")
 		}
-		c := synclient.New(cfg.ServerURL, cfg.AuthToken, cfg.NotesDir)
+		token, _ := auth.Token()
+		c := synclient.New(cfg.ServerURL, token, cfg.NotesDir)
 		fmt.Fprintf(os.Stderr, "pushing to %s …\n", cfg.ServerURL)
 		created, updated, deleted, conflicts, err := c.Push()
 		if err != nil {
