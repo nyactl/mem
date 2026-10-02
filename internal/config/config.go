@@ -14,7 +14,6 @@ type Config struct {
 
 	// server mode (mem serve)
 	ListenAddr string `json:"listen_addr"` // default ":4747"
-	AuthToken  string `json:"auth_token"`  // bearer token; empty = no auth
 
 	// client mode (mem sync)
 	ServerURL string `json:"server_url"` // e.g. "http://192.168.1.10:4747"
@@ -50,13 +49,13 @@ func Load() Config {
 }
 
 // applyEnv lets MEM_* environment variables override the file, so containers
-// and shells can supply paths and the auth token without writing them to disk.
+// and shells can supply paths without writing them to disk. The auth token is
+// deliberately absent: it is never read from a file, see internal/auth.
 func applyEnv(cfg *Config) {
 	for key, field := range map[string]*string{
 		"MEM_NOTES_DIR":       &cfg.NotesDir,
 		"MEM_ATTACHMENTS_DIR": &cfg.AttachmentsDir,
 		"MEM_LISTEN_ADDR":     &cfg.ListenAddr,
-		"MEM_AUTH_TOKEN":      &cfg.AuthToken,
 		"MEM_SERVER_URL":      &cfg.ServerURL,
 	} {
 		if v := os.Getenv(key); v != "" {

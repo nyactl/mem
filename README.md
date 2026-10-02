@@ -41,6 +41,13 @@ make install
 
 Requires Go. Optionally: `fzf`, `bat`, `rg` (ripgrep) for the full experience.
 
+Syncing against a server needs two things, once:
+
+```sh
+mem auth login                                    # token → system keychain
+echo '{"server_url":"https://mem.example"}' > ~/.config/mem/config.json
+```
+
 ---
 
 ## Storage
@@ -148,9 +155,38 @@ cosign verify ghcr.io/nyactl/mem:<version> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-Configuration comes from `config.json`, overridden by `MEM_NOTES_DIR`,
-`MEM_ATTACHMENTS_DIR`, `MEM_LISTEN_ADDR`, `MEM_AUTH_TOKEN` and
-`MEM_SERVER_URL`. Prefer the variables for the token so it never lands in a file.
+Paths and addresses come from `config.json`, overridden by `MEM_NOTES_DIR`,
+`MEM_ATTACHMENTS_DIR`, `MEM_LISTEN_ADDR` and `MEM_SERVER_URL`. The token is
+never one of them — see below.
+
+---
+
+## Auth
+
+```sh
+mem auth login    # prompts for the server's token, stores it in the system keychain
+mem auth logout   # remove it
+mem auth status   # where the token comes from, and whether the server accepts it
+```
+
+The token is read from `MEM_AUTH_TOKEN` if set, otherwise from the system
+keychain. It is never written to a configuration file.
+
+| Platform | Storage |
+|----------|---------|
+| macOS | Keychain |
+| Linux | Secret Service (GNOME Keyring / KWallet) |
+| Windows | Credential Manager |
+
+**Containers, CI, headless Linux** — no Secret Service, so set the variable
+instead:
+
+```sh
+export MEM_AUTH_TOKEN=…
+```
+
+A server started without a token accepts unauthenticated requests, which is
+fine on localhost and nowhere else.
 
 ---
 
