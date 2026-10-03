@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0] - 2026-10-03
+
+### Features
+
+- Store the auth token in the system keychain
+
+
 ## [0.2.2] - 2026-10-01
 
 ### Bug Fixes
