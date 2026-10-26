@@ -46,9 +46,18 @@ func (n Note) CreatedStr() string {
 	return n.Created.Format("2006-01-02")
 }
 
+// transliterate spells out letters a slug would otherwise drop: umlauts as ae, oe, ue, ß as ss,
+// accented letters without their accent.
+var transliterate = strings.NewReplacer(
+	"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss", "æ", "ae", "œ", "oe", "ø", "o",
+	"à", "a", "á", "a", "â", "a", "ã", "a", "å", "a", "ç", "c",
+	"è", "e", "é", "e", "ê", "e", "ë", "e", "ì", "i", "í", "i", "î", "i", "ï", "i",
+	"ñ", "n", "ò", "o", "ó", "o", "ô", "o", "õ", "o", "ù", "u", "ú", "u", "û", "u", "ý", "y", "ÿ", "y",
+)
+
 // Slugify converts a title to a filename slug.
 func Slugify(title string) string {
-	s := strings.ToLower(strings.TrimSpace(title))
+	s := transliterate.Replace(strings.ToLower(strings.TrimSpace(title)))
 	s = regexp.MustCompile(`[^a-z0-9\s-]`).ReplaceAllString(s, "")
 	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, "-")
 	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
@@ -268,6 +277,21 @@ func List(dir string) ([]Note, error) {
 		return notes[i].DisplayTime().After(notes[j].DisplayTime())
 	})
 	return notes, nil
+}
+
+// FindByIDOrSlug finds a note by its ID, else the newest note with that slug.
+func FindByIDOrSlug(dir, ref string) (Note, error) {
+	ref = strings.TrimSuffix(ref, ".md")
+	notes, err := List(dir)
+	if err != nil {
+		return Note{}, err
+	}
+	for _, n := range notes {
+		if strings.EqualFold(n.ID(), ref) {
+			return n, nil
+		}
+	}
+	return FindBySlug(dir, ref)
 }
 
 // FindBySlug finds a note by slug, ignoring the timestamp prefix.

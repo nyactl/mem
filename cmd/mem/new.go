@@ -19,6 +19,7 @@ var newLabels []string
 var newSources []string
 var newFiles []string
 var newDate string
+var newSupersedes []string
 
 var newCmd = &cobra.Command{
 	Use:   "new <content>  |  new <title> <content>",
@@ -28,6 +29,7 @@ var newCmd = &cobra.Command{
   mem new "ran into an interesting paper on indexing #research"
   mem new "kafka rebalance" "consumer group blocks all partitions for ~2min"
   mem new "meeting went sideways" -t work -t ops -d 2024-03-15
+  mem new "kafka rebalance" "now about 30s with cooperative rebalancing" --supersedes kafka-rebalance
 
 One argument:  slug is derived from the first few words of the content.
 Two arguments: first is the title (sets the slug), second is the body.`,
@@ -67,6 +69,14 @@ Two arguments: first is the title (sets the slug), second is the body.`,
 			if sl := note.Slugify(s); sl != "" {
 				sluggedSources = append(sluggedSources, sl)
 			}
+		}
+
+		for _, old := range newSupersedes {
+			n, err := note.FindByIDOrSlug(cfg.NotesDir, old)
+			if err != nil {
+				return fmt.Errorf("--supersedes: %w", err)
+			}
+			sluggedSources = append(sluggedSources, note.SupersedesPrefix+strings.ToLower(n.ID()))
 		}
 
 		allTags := note.MergeTags(newLabels, note.ExtractInlineTags(body))
@@ -133,6 +143,7 @@ func init() {
 	newCmd.Flags().StringArrayVarP(&newSources, "source", "s", nil, "source, repeatable")
 	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")
 	newCmd.Flags().StringVarP(&newDate, "date", "d", "", "override display datetime, e.g. 2024-03-15T09:00 or 2024-03-15")
+	newCmd.Flags().StringArrayVar(&newSupersedes, "supersedes", nil, "ID or slug (the newest note with it) of an older note this one replaces; search then leaves it out")
 	newCmd.RegisterFlagCompletionFunc("tag", tagCompleter)
 	newCmd.RegisterFlagCompletionFunc("source", sourceCompleter)
 	root.AddCommand(newCmd)

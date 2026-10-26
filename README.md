@@ -117,9 +117,16 @@ Open a note's body in `$EDITOR`. No slug opens fzf picker.
 
 Browse notes via fzf with bat preview. Pass a slug to view directly. `--tag/-t` pre-filters by tag.
 
-### `mem search <query>`
+### `mem search [<term>...]`
 
-Full-text search via ripgrep across `~/.mem/notes/`.
+Notes holding every term (case-insensitive) in body, slug, tags or sources, newest first, with the
+matching lines. `--tag/-t` (repeatable) keeps only notes carrying every given tag; `--since` and
+`--until` take a day or datetime and compare the note's date; `--json` prints the matches for
+scripts. A note superseded by a newer one is left out unless `--all`.
+
+When a note is no longer true, write a new one with `mem new ... --supersedes <id or slug>`: the
+new note carries the source `supersedes-<id>`, the old one stays as it was, and search shows the new
+one only.
 
 ### `mem tags`
 
