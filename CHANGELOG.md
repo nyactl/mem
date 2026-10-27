@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0] - 2026-10-27
+
+### Bug Fixes
+
+- Mem edit keeps a note's date, and its frontmatter when the editor fails (#30)
+
+### Features
+
+- Mem ls renders notes with their mermaid diagrams, and its picker edits, deletes and supersedes in place (#30)
+- The mem ls picker shows a note and comes back, lists notes by the date they are sorted by, and fits narrow terminals (#30)
+- The picker's preview names each diagram in one line, the full view draws it (#30)
+
+
 ## [0.4.0] - 2026-10-27
 
 ### Bug Fixes
