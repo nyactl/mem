@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/zalando/go-keyring"
+	"golang.org/x/term"
 )
 
 var authCmd = &cobra.Command{
@@ -28,10 +29,10 @@ var authLoginCmd = &cobra.Command{
 	Short: "Store the server's token in the system keychain",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		fmt.Fprint(os.Stderr, "Token for the mem server: ")
-		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Scan()
-		token := strings.TrimSpace(scanner.Text())
+		token, err := readToken()
+		if err != nil {
+			return err
+		}
 		if token == "" {
 			return fmt.Errorf("token cannot be empty")
 		}
@@ -56,6 +57,21 @@ var authLoginCmd = &cobra.Command{
 		fmt.Fprintln(os.Stderr, "token stored in the system keychain")
 		return nil
 	},
+}
+
+// readToken asks for the token without showing it when stdin is a terminal, and reads a line
+// otherwise, so it can also be piped in.
+func readToken() (string, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Scan()
+		return strings.TrimSpace(scanner.Text()), scanner.Err()
+	}
+	fmt.Fprint(os.Stderr, "Token for the mem server (not shown): ")
+	b, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	return strings.TrimSpace(string(b)), err
 }
 
 var authLogoutCmd = &cobra.Command{
