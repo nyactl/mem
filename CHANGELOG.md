@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] - 2026-10-27
+
+### Bug Fixes
+
+- Update vite, dompurify and source-map-js to patched versions and rebuild the web UI
+- Mem auth login reads the token without showing it
+- A sync rejected for its token points to mem auth login
+- The web UI's packages come from the public npm registry, also where another registry is configured
+
+### Features
+
+- Search by terms, tags and date with JSON output, superseding notes, and transliterated slugs (#25)
+
+
 ## [0.3.0] - 2026-10-03
 
 ### Features
