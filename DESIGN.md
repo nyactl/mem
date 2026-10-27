@@ -207,8 +207,11 @@ Browse notes interactively via fzf.
 - `--from` — pre-filters by person
 - `--unnamed` — shows only timestamp-only notes (the inbox queue), sorted oldest first
 - Each fzf line: `<slug>\t<created>` — unnamed notes show `(unnamed)\t<created>`
-- Preview pane renders the note (glamour; mermaid drawn by mermaid-ascii, flipped
-  top to bottom when too wide, source when it still does not fit)
+- Preview pane renders the note (glamour), each mermaid diagram as one line naming
+  its kind: the preview is for recognising a note, and a drawing is slow to make
+  and taller than the pane
+- Full view (`Enter`, `mem ls <slug>`) draws diagrams with mermaid-ascii, flipped
+  top to bottom when too wide, source when it still does not fit
 - Notes a newer note supersedes are left out unless `--all`
 - Key bindings act in place; the list reloads and the picker stays open:
   - `Enter` — show the selected note rendered, paged, then come back; `Esc` leaves

@@ -25,8 +25,10 @@ const codeMargin = 6
 // a preview.
 const drawTimeout = 2 * time.Second
 
-// Note renders n for a terminal width columns wide.
-func Note(n note.Note, width int) (string, error) {
+// Note renders n for a terminal width columns wide. A preview, a glance to recognise the note by,
+// gets a line naming each diagram instead of its drawing, which is slow to make and in a narrow
+// pane taller than the pane.
+func Note(n note.Note, width int, preview bool) (string, error) {
 	var meta []string
 	meta = append(meta, n.DisplayTime().Format("2006-01-02 15:04"))
 	if len(n.Tags) > 0 {
@@ -35,7 +37,7 @@ func Note(n note.Note, width int) (string, error) {
 	if len(n.Sources) > 0 {
 		meta = append(meta, "@"+strings.Join(n.Sources, " @"))
 	}
-	md := "# " + n.Slug + "\n\n" + strings.Join(meta, " · ") + "\n\n" + Diagrams(n.Body, width-codeMargin)
+	md := "# " + n.Slug + "\n\n" + strings.Join(meta, " · ") + "\n\n" + Diagrams(n.Body, width-codeMargin, preview)
 	return Markdown(md, width)
 }
 
@@ -54,8 +56,9 @@ func Markdown(md string, width int) (string, error) {
 }
 
 // Diagrams replaces each mermaid block in md by a code block holding its drawing, at most width
-// columns wide. A diagram that cannot be drawn or does not fit stays as source, with a hint.
-func Diagrams(md string, width int) string {
+// columns wide. A diagram that cannot be drawn or does not fit stays as source, with a hint. With
+// named, a block becomes one line naming its kind instead.
+func Diagrams(md string, width int, named bool) string {
 	lines := strings.Split(md, "\n")
 	var out []string
 	for i := 0; i < len(lines); i++ {
@@ -73,7 +76,9 @@ func Diagrams(md string, width int) string {
 			break
 		}
 		src := strings.Join(lines[i+1:end], "\n")
-		if drawing, ok := Fit(src, width); ok {
+		if named {
+			out = append(out, "*▸ "+kind(src)+" · drawn in the full view*")
+		} else if drawing, ok := Fit(src, width); ok {
 			out = append(out, "```", drawing, "```")
 		} else {
 			out = append(out, lines[i:end+1]...)
@@ -82,6 +87,27 @@ func Diagrams(md string, width int) string {
 		i = end
 	}
 	return strings.Join(out, "\n")
+}
+
+// kind names the diagram src declares on its first line.
+func kind(src string) string {
+	for _, l := range strings.Split(src, "\n") {
+		t := strings.TrimSpace(l)
+		if t == "" || strings.HasPrefix(t, "%%") {
+			continue
+		}
+		switch word := strings.Fields(t)[0]; word {
+		case "graph", "flowchart":
+			return "flowchart"
+		case "sequenceDiagram":
+			return "sequence diagram"
+		case "erDiagram":
+			return "ER diagram"
+		default:
+			return word + " diagram"
+		}
+	}
+	return "diagram"
 }
 
 var reFence = regexp.MustCompile("^ {0,3}(```+|~~~+)\\s*mermaid\\s*$")

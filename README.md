@@ -120,7 +120,8 @@ diagrams drawn in box characters), the plain file when piped. A diagram too wide
 drawn top to bottom; one that still does not fit, or of another kind, stays as source. The style
 follows `GLAMOUR_STYLE` (`dark` by default, or `light`).
 
-Without a slug, browse notes in fzf with a rendered preview. `--tag/-t` pre-filters by tag; notes
+Without a slug, browse notes in fzf with a rendered preview; it names each diagram in one line,
+the full view draws it. `--tag/-t` pre-filters by tag; notes
 superseded by a newer one are left out unless `--all`. In the picker:
 
 - `enter` shows the note in the pager; `q` comes back to the picker, `esc` leaves it

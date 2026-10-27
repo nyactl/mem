@@ -83,7 +83,7 @@ func TestTopDown(t *testing.T) {
 
 func TestDiagramsReplacesOnlyMermaidBlocks(t *testing.T) {
 	md := "intro\n\n```go\nx := 1\n```\n\n```mermaid\ngraph LR\nA --> B\n```\n\nafter"
-	got := Diagrams(md, 80)
+	got := Diagrams(md, 80, false)
 	if !strings.Contains(got, "```go\nx := 1\n```") {
 		t.Errorf("code block changed:\n%s", got)
 	}
@@ -103,7 +103,7 @@ func TestDiagramsKeepsSourceItCannotDraw(t *testing.T) {
 		"tilde fence": "~~~mermaid\n" + loopGraph + "\n~~~",
 	} {
 		t.Run(name, func(t *testing.T) {
-			got := Diagrams(md, 8)
+			got := Diagrams(md, 8, false)
 			if name == "unclosed" {
 				if got != md {
 					t.Errorf("unclosed block changed:\n%s", got)
@@ -126,7 +126,7 @@ func TestNoteFitsItsWidth(t *testing.T) {
 		Body:    "Some text that is long enough to need wrapping in a narrow preview pane, more than once.\n\n```mermaid\n" + wideGraph + "\n```\n\n```sh\nmem ls --tag kb\n```",
 	}
 	for _, width := range []int{60, 73, 120} {
-		out, err := Note(n, width)
+		out, err := Note(n, width, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -169,12 +169,31 @@ func TestNoteLeavesRoomForCodeMargins(t *testing.T) {
 		t.Fatal("not drawn")
 	}
 	width := Width(lr) + 4
-	out, err := Note(note.Note{Slug: "s", Body: "```mermaid\n" + src + "\n```"}, width)
+	out, err := Note(note.Note{Slug: "s", Body: "```mermaid\n" + src + "\n```"}, width, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plain := stripANSI(out)
 	if !strings.Contains(plain, "second step") {
 		t.Errorf("drawing wrapped in a terminal of %d:\n%s", width, plain)
+	}
+}
+
+func TestPreviewNamesDiagrams(t *testing.T) {
+	n := note.Note{Slug: "s", Body: "before\n\n```mermaid\n%% c\n" + wideGraph + "\n```\n\n```mermaid\nsequenceDiagram\nA->>B: hi\n```\n\n```mermaid\npie\n\"a\": 1\n```\n\nafter"}
+	out, err := Note(n, 60, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := stripANSI(out)
+	for _, want := range []string{"▸ flowchart · drawn in the full view", "▸ sequence diagram · drawn in the full view", "▸ pie diagram · drawn in the full view", "before", "after"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("%q missing:\n%s", want, plain)
+		}
+	}
+	for _, unwanted := range []string{"┌", "Docs", "mermaid", "web UI"} {
+		if strings.Contains(plain, unwanted) {
+			t.Errorf("%q in the preview:\n%s", unwanted, plain)
+		}
 	}
 }

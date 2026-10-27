@@ -67,7 +67,7 @@ func showNote(path, less string) error {
 	if err != nil || width <= 0 {
 		width = 80
 	}
-	out, err := render.Note(n, width)
+	out, err := render.Note(n, width, false)
 	if err != nil {
 		return err
 	}

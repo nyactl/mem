@@ -31,7 +31,7 @@ var pickerPreviewCmd = &cobra.Command{
 		if width <= 0 {
 			width = 80
 		}
-		out, err := render.Note(n, width)
+		out, err := render.Note(n, width, true)
 		if err != nil {
 			raw, rerr := os.ReadFile(args[0])
 			if rerr != nil {
