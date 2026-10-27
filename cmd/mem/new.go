@@ -82,11 +82,6 @@ Two arguments: first is the title (sets the slug), second is the body.`,
 		allTags := note.MergeTags(newLabels, note.ExtractInlineTags(body))
 		allSources := note.MergeSources(sluggedSources, note.ExtractInlineSources(body))
 
-		slug2 := slug
-		for i := 2; note.Exists(note.FilePath(cfg.NotesDir, ts, slug2)); i++ {
-			slug2 = fmt.Sprintf("%s-%d", slug, i)
-		}
-
 		var date *time.Time
 		if newDate != "" {
 			formats := []string{
@@ -110,7 +105,7 @@ Two arguments: first is the title (sets the slug), second is the body.`,
 			date = &parsed
 		}
 
-		path := note.FilePath(cfg.NotesDir, ts, slug2)
+		path := uniquePath(cfg.NotesDir, ts, slug)
 		content := note.BuildFrontmatter(allTags, allSources, attachmentPaths, date) + body + "\n"
 		if err := note.WriteRaw(path, content); err != nil {
 			return err
@@ -122,6 +117,15 @@ Two arguments: first is the title (sets the slug), second is the body.`,
 		_, _ = index.Rebuild(cfg.NotesDir)
 		return nil
 	},
+}
+
+// uniquePath is the path for a new note, its slug numbered when another note took it that second.
+func uniquePath(dir string, ts time.Time, slug string) string {
+	slug2 := slug
+	for i := 2; note.Exists(note.FilePath(dir, ts, slug2)); i++ {
+		slug2 = fmt.Sprintf("%s-%d", slug, i)
+	}
+	return note.FilePath(dir, ts, slug2)
 }
 
 var reInlineMarkers = regexp.MustCompile(`[#@][a-zA-Z][a-zA-Z0-9-]*`)

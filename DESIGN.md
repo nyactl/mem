@@ -207,12 +207,16 @@ Browse notes interactively via fzf.
 - `--from` — pre-filters by person
 - `--unnamed` — shows only timestamp-only notes (the inbox queue), sorted oldest first
 - Each fzf line: `<slug>\t<created>` — unnamed notes show `(unnamed)\t<created>`
-- bat preview pane
-- Key bindings:
-  - `Enter` — open selected note in `mem get` (view)
-  - `Ctrl-E` — open selected note in `mem edit`
-  - `Ctrl-R` — rename selected note (prompts for new title)
-  - No delete binding — destructive actions stay explicit CLI commands
+- Preview pane renders the note (glamour; mermaid drawn by mermaid-ascii, flipped
+  top to bottom when too wide, source when it still does not fit)
+- Notes a newer note supersedes are left out unless `--all`
+- Key bindings act in place; the list reloads and the picker stays open:
+  - `Enter` — show the selected note rendered, paged
+  - `Ctrl-E` — edit it in `$EDITOR`
+  - `Ctrl-X` — delete it after asking; sync removes it on the server, whose git
+    history keeps it
+  - `Ctrl-R` — edit a copy saved as a new note that supersedes it, for findings
+    that are out of date
 
 ### `mem search <query>`
 

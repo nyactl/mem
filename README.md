@@ -39,7 +39,7 @@ record remains true to the moment it was written.
 make install
 ```
 
-Requires Go. Optionally: `fzf`, `bat`, `rg` (ripgrep) for the full experience.
+Requires Go. Optionally: `fzf` for the pickers.
 
 Syncing against a server needs two things, once:
 
@@ -111,11 +111,23 @@ mem new "dream about the mountains" "we were climbing..." -d 2026-08-19
 
 ### `mem edit [<slug>]`
 
-Open a note's body in `$EDITOR`. No slug opens fzf picker.
+Open a note's body in `$EDITOR`; its frontmatter stays as it is. No slug opens fzf picker.
 
-### `mem ls [<slug>] [--tag <tag>]`
+### `mem ls [<slug>] [--tag <tag>] [--all]`
 
-Browse notes via fzf with bat preview. Pass a slug to view directly. `--tag/-t` pre-filters by tag.
+Show a note: rendered in a terminal (markdown, highlighted code, mermaid flowcharts and sequence
+diagrams drawn in box characters), the plain file when piped. A diagram too wide for the terminal is
+drawn top to bottom; one that still does not fit, or of another kind, stays as source. The style
+follows `GLAMOUR_STYLE` (`dark` by default, or `light`).
+
+Without a slug, browse notes in fzf with a rendered preview. `--tag/-t` pre-filters by tag; notes
+superseded by a newer one are left out unless `--all`. In the picker:
+
+- `ctrl-e` edits the note under the cursor
+- `ctrl-x` deletes it after asking
+- `ctrl-r` edits a copy and saves it as a new note that supersedes it
+
+`mem ls --tag kb` is the place to look through and tidy findings.
 
 ### `mem search [<term>...]`
 
