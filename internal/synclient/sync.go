@@ -255,10 +255,10 @@ func (c *Client) statusError(op string, resp *http.Response) error {
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		if c.token == "" {
-			return fmt.Errorf("%s: the server requires a bearer token (%d) but no auth_token is configured — set auth_token in the config file, or MEM_AUTH_TOKEN in the environment",
+			return fmt.Errorf("%s: the server requires a bearer token (%d) but none is configured — run mem auth login, or set MEM_AUTH_TOKEN",
 				op, resp.StatusCode)
 		}
-		return fmt.Errorf("%s: the server rejected the configured auth_token (%d) — check it matches the server's auth_token",
+		return fmt.Errorf("%s: the server rejected the token (%d) — run mem auth login with the server's token",
 			op, resp.StatusCode)
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))

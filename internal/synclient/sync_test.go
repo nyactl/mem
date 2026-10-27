@@ -21,7 +21,7 @@ func TestPullWithoutTokenNamesTheMissingConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, want := range []string{"no auth_token is configured", "MEM_AUTH_TOKEN"} {
+	for _, want := range []string{"none is configured", "mem auth login", "MEM_AUTH_TOKEN"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
@@ -40,10 +40,10 @@ func TestPullWithWrongTokenSaysSo(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if !strings.Contains(err.Error(), "rejected the configured auth_token") {
+	if !strings.Contains(err.Error(), "rejected the token") {
 		t.Errorf("error %q does not report a rejected token", err)
 	}
-	if strings.Contains(err.Error(), "no auth_token is configured") {
+	if strings.Contains(err.Error(), "none is configured") {
 		t.Errorf("error %q tells the user to set a token they already have", err)
 	}
 }
@@ -55,7 +55,7 @@ func TestPullTreats403LikeAnAuthFailure(t *testing.T) {
 	defer srv.Close()
 
 	_, _, _, err := New(srv.URL, "", t.TempDir()).Pull()
-	if err == nil || !strings.Contains(err.Error(), "no auth_token is configured") {
+	if err == nil || !strings.Contains(err.Error(), "none is configured") {
 		t.Errorf("403 error = %v, want the auth hint", err)
 	}
 }
