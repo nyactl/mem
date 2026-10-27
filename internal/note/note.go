@@ -80,68 +80,17 @@ func Exists(path string) bool {
 	return err == nil
 }
 
-// Create writes a new blank note file and returns its path.
-// Frontmatter is not written — FinalizeNote generates it after the editor closes.
-func Create(dir string, ts time.Time, slug string) (string, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("create notes dir: %w", err)
-	}
-	path := filepath.Join(dir, Filename(ts, slug))
-	if _, err := os.Stat(path); err == nil {
-		return "", fmt.Errorf("note %q already exists — use: mem edit %s", slug, slug)
-	}
-	return path, os.WriteFile(path, []byte(""), 0600)
-}
-
-// CreateDraft writes a blank note file and returns its path.
-// FinalizeNote derives everything from what the human writes.
-func CreateDraft(dir string, ts time.Time) (string, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("create notes dir: %w", err)
-	}
-	path := filepath.Join(dir, Filename(ts, "draft"))
-	return path, os.WriteFile(path, []byte(""), 0600)
-}
-
-// StripFrontmatter removes the frontmatter block from the file on disk and
-// returns the extracted metadata. Call before opening an editor so the human
-// only sees the note body.
-func StripFrontmatter(path string) (tags []string, sources []string, attachments []string, err error) {
+// SetBody replaces a note's body and keeps its date and attachments. #tags and @sources in the new
+// body are added to those in the frontmatter.
+func SetBody(path, body string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-	tags, sources, attachments, _, body := parseFrontmatter(string(data))
-	return tags, sources, attachments, os.WriteFile(path, []byte(body), 0600)
-}
-
-// FinalizeNote reads a note after editing, extracts inline #tags and @sources
-// from the body, merges with any extra metadata, and writes frontmatter.
-// The filename (and therefore the note ID) never changes.
-// Returns the path unchanged.
-func FinalizeNote(path string, extraTags []string, extraSources []string, extraAttachments []string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return path, err
-	}
-	if len(strings.TrimSpace(string(data))) == 0 {
-		_ = os.Remove(path)
-		return "", nil
-	}
-
-	tags, sources, attachments, date, body := parseFrontmatter(string(data))
-
-	tags = mergeTags(tags, extraTags)
+	tags, sources, attachments, date, _ := parseFrontmatter(string(data))
 	tags = mergeTags(tags, extractInlineTags(body))
-	sources = mergeSources(sources, extraSources)
 	sources = mergeSources(sources, extractInlineSources(body))
-	attachments = append(attachments, extraAttachments...)
-
-	newContent := buildFrontmatter(tags, sources, attachments, date) + body
-	if err := os.WriteFile(path, []byte(newContent), 0600); err != nil {
-		return path, err
-	}
-	return path, nil
+	return WriteRaw(path, buildFrontmatter(tags, sources, attachments, date)+strings.TrimRight(body, "\n")+"\n")
 }
 
 var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)

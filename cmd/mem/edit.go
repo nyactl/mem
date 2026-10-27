@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"mem/internal/config"
 	"mem/internal/index"
 	"mem/internal/note"
@@ -35,24 +39,52 @@ var editCmd = &cobra.Command{
 			}
 		}
 
-		// Strip frontmatter before opening — human only sees body.
-		tags, sources, attachments, err := note.StripFrontmatter(n.Path)
-		if err != nil {
-			return err
-		}
-
-		if err := openEditor(n.Path); err != nil {
-			return err
-		}
-
-		// Restore frontmatter, merging any inline changes from the edit.
-		if _, err := note.FinalizeNote(n.Path, tags, sources, attachments); err != nil {
-			return err
-		}
-
-		_, _ = index.Rebuild(cfg.NotesDir)
-		return nil
+		_, err = editNote(cfg.NotesDir, n)
+		return err
 	},
+}
+
+// editNote edits n's body in $EDITOR. Emptying it deletes the note. It reports whether n changed.
+func editNote(notesDir string, n note.Note) (bool, error) {
+	body, err := editBody(n.Body)
+	if err != nil || body == strings.TrimRight(n.Body, "\n \t") {
+		return false, err
+	}
+	if body == "" {
+		if err := os.Remove(n.Path); err != nil {
+			return false, fmt.Errorf("delete: %w", err)
+		}
+	} else if err := note.SetBody(n.Path, body); err != nil {
+		return false, err
+	}
+	_, _ = index.Rebuild(notesDir)
+	return true, nil
+}
+
+// editBody opens body in $EDITOR and returns what was saved, without trailing blank lines. The
+// editor gets a copy, so the note's frontmatter stays out of its reach and is untouched when it
+// fails.
+func editBody(body string) (string, error) {
+	f, err := os.CreateTemp("", "mem-*.md")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(f.Name())
+	_, err = f.WriteString(strings.TrimRight(body, "\n") + "\n")
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := openEditor(f.Name()); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(f.Name())
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(string(data), "\n \t"), nil
 }
 
 func init() {

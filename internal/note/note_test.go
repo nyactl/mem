@@ -3,6 +3,7 @@ package note
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -52,4 +53,35 @@ func indexOf(h, n string) int {
 		}
 	}
 	return -1
+}
+
+func TestSetBodyKeepsFrontmatter(t *testing.T) {
+	day := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)
+	path := filepath.Join(t.TempDir(), Filename(time.Date(2026, 10, 27, 8, 0, 0, 0, time.Local), "finding"))
+	if err := WriteRaw(path, BuildFrontmatter([]string{"kb"}, []string{"agentdeck"}, []string{"a/b.png"}, &day)+"old body\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetBody(path, "new body #extra @elsewhere\n\n"); err != nil {
+		t.Fatal(err)
+	}
+	n, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Date == nil || !n.Date.Equal(day) {
+		t.Errorf("date = %v, want %v", n.Date, day)
+	}
+	if got := strings.Join(n.Tags, ","); got != "kb,extra" {
+		t.Errorf("tags = %s", got)
+	}
+	if got := strings.Join(n.Sources, ","); got != "agentdeck,elsewhere" {
+		t.Errorf("sources = %s", got)
+	}
+	if got := strings.Join(n.Attachments, ","); got != "a/b.png" {
+		t.Errorf("attachments = %s", got)
+	}
+	raw, _ := os.ReadFile(path)
+	if !strings.HasSuffix(string(raw), "---\nnew body #extra @elsewhere\n") {
+		t.Errorf("file = %q", raw)
+	}
 }
