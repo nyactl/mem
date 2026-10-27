@@ -88,7 +88,7 @@ var relatedCmd = &cobra.Command{
 		if err != nil || n.Path == "" {
 			return err
 		}
-		return showNote(n.Path)
+		return showNote(n.Path, lessShow)
 	},
 }
 

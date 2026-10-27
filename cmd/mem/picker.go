@@ -44,6 +44,18 @@ var pickerPreviewCmd = &cobra.Command{
 	},
 }
 
+var pickerShowCmd = &cobra.Command{
+	Use:  "show <path>",
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := showNote(args[0], lessPicker); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			waitForKey()
+		}
+		return nil
+	},
+}
+
 func pickerActionCmd(action string, run func(notesDir string, n note.Note) (*note.Note, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:  action + " <path> <list>",
@@ -95,6 +107,7 @@ func waitForKey() {
 
 func init() {
 	pickerCmd.AddCommand(pickerPreviewCmd)
+	pickerCmd.AddCommand(pickerShowCmd)
 	pickerCmd.AddCommand(pickerActionCmd("edit", func(dir string, n note.Note) (*note.Note, error) {
 		if _, err := editNote(dir, n); err != nil {
 			return &n, err

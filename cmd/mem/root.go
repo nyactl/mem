@@ -47,8 +47,9 @@ func openEditor(path string) error {
 	return cmd.Run()
 }
 
-// showNote prints a note: rendered and paged in a terminal, as the plain file otherwise.
-func showNote(path string) error {
+// showNote prints a note: rendered and paged in a terminal, as the plain file otherwise. less
+// gets the options in less unless LESS is set.
+func showNote(path, less string) error {
 	fd := int(os.Stdout.Fd())
 	if !term.IsTerminal(fd) {
 		raw, err := os.ReadFile(path)
@@ -70,12 +71,18 @@ func showNote(path string) error {
 	if err != nil {
 		return err
 	}
-	return page(out)
+	return page(out, less)
 }
 
-// page shows s in $PAGER, less by default, the way git does: LESS=FRX unless set, so a short note
-// is printed and left on the screen.
-func page(s string) error {
+// Options for less: FRX prints a short note and leaves it on the screen, the way git does. Shown
+// from the picker, a note stays until q: fzf would redraw over it at once.
+const (
+	lessShow   = "FRX"
+	lessPicker = "R"
+)
+
+// page shows s in $PAGER, less by default with the options in less unless LESS is set.
+func page(s, less string) error {
 	pager := os.Getenv("PAGER")
 	if pager == "" {
 		pager = "less"
@@ -87,7 +94,7 @@ func page(s string) error {
 	}
 	cmd := exec.Command(parts[0], parts[1:]...)
 	if os.Getenv("LESS") == "" {
-		cmd.Env = append(os.Environ(), "LESS=FRX")
+		cmd.Env = append(os.Environ(), "LESS="+less)
 	}
 	cmd.Stdin = strings.NewReader(s)
 	cmd.Stdout = os.Stdout
@@ -104,9 +111,20 @@ var pickerKeys = []struct{ key, hint, action string }{
 }
 
 // pickNote presents notes in fzf with a rendered preview and returns the selected note. Returns a
-// zero Note (empty Path) if the user cancelled. The pickerKeys change a note in place: the list
-// lives in a temporary file that the action rewrites and fzf reloads, so the picker stays open.
+// zero Note (empty Path) if the user cancelled.
 func pickNote(notes []note.Note) (note.Note, error) {
+	return runPicker(notes, false)
+}
+
+// browseNotes presents notes in fzf until the user leaves it; enter shows a note and comes back.
+func browseNotes(notes []note.Note) error {
+	_, err := runPicker(notes, true)
+	return err
+}
+
+// runPicker runs fzf over notes. The pickerKeys change a note in place: the list lives in a
+// temporary file that the action rewrites and fzf reloads, so the picker stays open.
+func runPicker(notes []note.Note, browse bool) (note.Note, error) {
 	if len(notes) == 0 {
 		return note.Note{}, fmt.Errorf("no notes found")
 	}
@@ -133,11 +151,15 @@ func pickNote(notes []note.Note) (note.Note, error) {
 	var hints []string
 	args := []string{
 		"--delimiter=\t",
-		"--with-nth=2,3,4",
+		"--with-nth=2",
 		"--ansi",
 		"--no-sort",
 		"--preview", shellQuote(exe) + " picker preview {1}",
-		"--preview-window", "right:60%:wrap",
+		"--preview-window", "right,60%,wrap,<120(down,60%,wrap)",
+	}
+	if browse {
+		hints = append(hints, "enter show")
+		args = append(args, "--bind", fmt.Sprintf("enter:execute(%s picker show {1})", shellQuote(exe)))
 	}
 	for _, k := range pickerKeys {
 		hints = append(hints, k.hint+" "+k.action)
@@ -173,13 +195,14 @@ func pickNote(notes []note.Note) (note.Note, error) {
 	return note.Parse(path)
 }
 
-// pickerLine is a note's line in the picker: its path, which fzf hides, then what it shows.
+// pickerLine is a note's line in the picker: its path, which fzf hides, then its date (the one
+// notes are sorted by), slug and dimmed tags.
 func pickerLine(n note.Note) string {
-	tags := ""
-	for _, t := range n.Tags {
-		tags += "#" + t + " "
+	line := n.Path + "\t" + n.DisplayTime().Format("2006-01-02") + " " + n.Slug
+	if len(n.Tags) > 0 {
+		line += " \x1b[2m#" + strings.Join(n.Tags, " #") + "\x1b[0m"
 	}
-	return n.Path + "\t" + n.Created.Format("2006-01-02 15:04:05") + "\t" + n.Slug + "\t" + strings.TrimRight(tags, " ")
+	return line
 }
 
 // shellQuote quotes s for the shell fzf runs its commands in.

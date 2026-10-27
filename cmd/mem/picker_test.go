@@ -91,3 +91,16 @@ func TestShellQuote(t *testing.T) {
 		t.Errorf("got %s", got)
 	}
 }
+
+// The list is sorted by a note's date, so the line shows that date, not when the file was made.
+func TestPickerLineShowsDisplayDate(t *testing.T) {
+	day := time.Date(2026, 6, 3, 12, 0, 0, 0, time.Local)
+	n := note.Note{Path: "/n/x.md", Slug: "x", Created: time.Date(2026, 10, 27, 0, 0, 0, 0, time.Local), Date: &day, Tags: []string{"kb", "ai"}}
+	if got, want := pickerLine(n), "/n/x.md\t2026-06-03 x \x1b[2m#kb #ai\x1b[0m"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	n.Tags = nil
+	if got, want := pickerLine(n), "/n/x.md\t2026-06-03 x"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

@@ -123,6 +123,7 @@ follows `GLAMOUR_STYLE` (`dark` by default, or `light`).
 Without a slug, browse notes in fzf with a rendered preview. `--tag/-t` pre-filters by tag; notes
 superseded by a newer one are left out unless `--all`. In the picker:
 
+- `enter` shows the note in the pager; `q` comes back to the picker, `esc` leaves it
 - `ctrl-e` edits the note under the cursor
 - `ctrl-x` deletes it after asking
 - `ctrl-r` edits a copy and saves it as a new note that supersedes it

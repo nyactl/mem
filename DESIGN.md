@@ -211,7 +211,9 @@ Browse notes interactively via fzf.
   top to bottom when too wide, source when it still does not fit)
 - Notes a newer note supersedes are left out unless `--all`
 - Key bindings act in place; the list reloads and the picker stays open:
-  - `Enter` — show the selected note rendered, paged
+  - `Enter` — show the selected note rendered, paged, then come back; `Esc` leaves
+- Each line: display date, slug, dimmed tags; the preview moves below the list
+  in terminals narrower than 120 columns
   - `Ctrl-E` — edit it in `$EDITOR`
   - `Ctrl-X` — delete it after asking; sync removes it on the server, whose git
     history keeps it

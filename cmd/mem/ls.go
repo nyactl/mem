@@ -19,9 +19,11 @@ var lsCmd = &cobra.Command{
 	Use:   "ls [<slug>]",
 	Short: "Browse or view notes (fzf picker if no slug given)",
 	Long: `Shows a note: rendered in a terminal, with mermaid diagrams drawn in box characters, and as
-the plain file when piped. Without a slug, picks one in fzf with a rendered preview; there
-ctrl-e edits the note under the cursor, ctrl-x deletes it after asking, and ctrl-r edits a
-copy saved as a new note that supersedes it (see mem new --supersedes).
+the plain file when piped.
+
+Without a slug, browses notes in fzf with a rendered preview. enter shows a note and comes
+back, esc leaves. ctrl-e edits the note under the cursor, ctrl-x deletes it after asking, and
+ctrl-r edits a copy saved as a new note that supersedes it (see mem new --supersedes).
 
 A note superseded by a newer one is left out unless --all.`,
 	ValidArgsFunction: slugCompleter,
@@ -34,7 +36,7 @@ A note superseded by a newer one is left out unless --all.`,
 			if err != nil {
 				return err
 			}
-			return showNote(n.Path)
+			return showNote(n.Path, lessShow)
 		}
 
 		all, err := note.List(cfg.NotesDir)
@@ -55,11 +57,7 @@ A note superseded by a newer one is left out unless --all.`,
 			return nil
 		}
 
-		n, err := pickNote(notes)
-		if err != nil || n.Path == "" {
-			return err
-		}
-		return showNote(n.Path)
+		return browseNotes(notes)
 	},
 }
 
