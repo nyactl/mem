@@ -145,6 +145,21 @@ When a note is no longer true, write a new one with `mem new ... --supersedes <i
 new note carries the source `supersedes-<id>`, the old one stays as it was, and search shows the new
 one only.
 
+### `mem g [<term>]`  ·  `mem g add <term> <meaning>`
+
+A glossary of terms and abbreviations. An entry is a note tagged `glossary`, its title the term,
+its body the meaning:
+
+```sh
+mem g add CAS "compare-and-swap, an atomic CPU instruction for lock-free updates"
+mem g cas
+# CAS  compare-and-swap, an atomic CPU instruction for lock-free updates  (2026-10-28)
+```
+
+`mem g <term>` shows the entries whose term matches, ignoring case: exact matches first, then
+terms starting with it, one line each. `mem g` lists every entry. A second meaning of a term is a
+second `mem g add`; `mem g add` is the same as `mem new --title <term> -t glossary <meaning>`.
+
 ### `mem tags`
 
 List all tags with note counts, merged from notes and tag backend.
