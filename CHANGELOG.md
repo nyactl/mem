@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0] - 2026-10-28
+
+### Bug Fixes
+
+- Mem new creates the notes directory, so the first note on a new machine is saved (#35)
+
+### Features
+
+- Notes keep their title as typed in a title field, shown, searched and synced in place of the slug (#34)
+- Mem g looks up terms in a glossary of notes, exact matches first, and mem g add captures one (#34)
+
+
 ## [0.5.0] - 2026-10-27
 
 ### Bug Fixes
