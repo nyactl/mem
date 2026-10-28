@@ -108,6 +108,9 @@ func addNote(cfg config.Config, title, body string, tags, sources, files []strin
 		displayDate = parsed
 	}
 
+	if err := os.MkdirAll(cfg.NotesDir, 0700); err != nil {
+		return note.Note{}, err
+	}
 	path := uniquePath(cfg.NotesDir, ts, slug)
 	content := note.BuildFrontmatter(title, allTags, allSources, attachmentPaths, displayDate) + body + "\n"
 	if err := note.WriteRaw(path, content); err != nil {

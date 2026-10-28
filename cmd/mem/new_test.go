@@ -1,9 +1,11 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 
 	"mem/internal/config"
+	"mem/internal/note"
 )
 
 func TestAddNoteTitleOrFirstWords(t *testing.T) {
@@ -25,5 +27,15 @@ func TestAddNoteTitleOrFirstWords(t *testing.T) {
 	}
 	if _, err := addNote(cfg, "CAS", "  ", nil, nil, nil, "", nil); err == nil {
 		t.Error("empty body accepted")
+	}
+}
+
+func TestAddNoteCreatesNotesDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "fresh", "notes")
+	if _, err := addNote(config.Config{NotesDir: dir}, "", "first note on a new machine", nil, nil, nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if notes, _ := note.List(dir); len(notes) != 1 {
+		t.Errorf("%d notes", len(notes))
 	}
 }
