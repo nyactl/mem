@@ -51,7 +51,7 @@
   let grouped = $derived.by(() => {
     const q = query.trim().toLowerCase()
     const filtered = q
-      ? notes.filter(n => n.slug.includes(q) || (n.tags || []).some(t => t.includes(q)))
+      ? notes.filter(n => n.slug.includes(q) || (n.display_title || '').toLowerCase().includes(q) || (n.tags || []).some(t => t.includes(q)))
       : notes
     const sorted = [...filtered].sort((a, b) => effectiveDate(b).localeCompare(effectiveDate(a)))
     const byDay = new Map()
@@ -174,7 +174,7 @@
           {#each dayNotes as note (note.id)}
             <button class="note-row" onclick={() => onopen(note.id)}>
               <span class="n-time">{time(note)}</span>
-              <span class="n-slug">{note.slug}</span>
+              <span class="n-slug">{note.display_title || note.slug}</span>
               {#if note.tags?.length}
                 <span class="n-tags">{note.tags.map(t => '#' + t).join(' ')}</span>
               {/if}

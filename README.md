@@ -72,6 +72,7 @@ Timestamp is the sole source of creation time — not repeated in frontmatter.
 
 ```markdown
 ---
+title: Kafka rebalance
 date: 2026-05-10
 tags: [kafka, rebalance]
 sources: [alice]
@@ -82,11 +83,12 @@ Consumer group rebalance blocks all partitions for ~2min with the default eager
 protocol. Fix: switch to cooperative-sticky assignor.
 ```
 
+- `title` — the title as typed (`C++`, `.NET`, `Größe`), which the slug keeps only the letters and digits of; omitted when the note was captured without one, and then the slug is its title
 - `tags` — always present, may be empty `[]`
 - `date` — optional; overrides the filename timestamp for display and `mem day` filtering. Accepts a date (`2026-05-10`) or datetime (`2026-05-10T09:30`). Use when capturing something that happened in the past — a dream, an experience from last week, a backdated log entry. The filename timestamp still records when you actually captured it.
 - `sources` — omitted if none; person name or URL
 - `attachments` — omitted if none
-- Nothing else — no `created`, no `updated`, no `title`
+- Nothing else — no `created`, no `updated`
 
 ---
 
@@ -99,11 +101,12 @@ Capture a note instantly from the command line — no editor opens.
 ```sh
 mem new "kafka rebalance blocks all partitions for ~2min #kafka"
 mem new "kafka rebalance" "consumer group blocks all partitions for ~2min"
+mem new --title "C++" "templates are Turing-complete"
 mem new "dream about the mountains" "we were climbing..." -d 2026-08-19
 ```
 
 - One argument: slug derived from first few words of content
-- Two arguments: first is the title (sets the slug), second is the body
+- Two arguments, or `--title`: the title, kept as typed and the source of the slug, then the body
 - `-t/--tag <tag>` — repeatable
 - `-s/--source <value>` — person name or URL
 - `-f/--file <path>` — attach file, repeatable
@@ -133,7 +136,7 @@ superseded by a newer one are left out unless `--all`. In the picker:
 
 ### `mem search [<term>...]`
 
-Notes holding every term (case-insensitive) in body, slug, tags or sources, newest first, with the
+Notes holding every term (case-insensitive) in body, title, slug, tags or sources, newest first, with the
 matching lines. `--tag/-t` (repeatable) keeps only notes carrying every given tag; `--since` and
 `--until` take a day or datetime and compare the note's date; `--json` prints the matches for
 scripts. A note superseded by a newer one is left out unless `--all`.

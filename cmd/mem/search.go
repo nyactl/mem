@@ -27,8 +27,8 @@ const maxShownLines = 3
 var searchCmd = &cobra.Command{
 	Use:   "search [<term>...]",
 	Short: "Find notes holding all terms, optionally by tag and date",
-	Long: `Finds the notes holding every term (case-insensitive) in their body, slug, tags or
-sources, newest first, with the lines that match.
+	Long: `Finds the notes holding every term (case-insensitive) in their body, title, slug, tags
+or sources, newest first, with the lines that match.
 
   mem search kafka rebalance
   mem search restore --tag kb --since 2026-08-01 --until 2026-09-15
@@ -65,7 +65,7 @@ is left out unless --all.`,
 			return nil
 		}
 		for _, m := range matches {
-			line := m.DisplayTime().Format("2006-01-02") + "  " + m.Slug
+			line := m.DisplayTime().Format("2006-01-02") + "  " + m.DisplayTitle()
 			if len(m.Tags) > 0 {
 				line += "  [" + strings.Join(m.Tags, ", ") + "]"
 			}
@@ -104,6 +104,7 @@ func searchDate(flag, v string, endOfDay bool) (*time.Time, error) {
 type searchResult struct {
 	ID           string   `json:"id"`
 	Slug         string   `json:"slug"`
+	Title        string   `json:"title"`
 	Path         string   `json:"path"`
 	Date         string   `json:"date"`
 	Tags         []string `json:"tags"`
@@ -117,7 +118,7 @@ func printSearchJSON(matches []note.Match) error {
 	out := make([]searchResult, 0, len(matches))
 	for _, m := range matches {
 		out = append(out, searchResult{
-			ID: m.ID(), Slug: m.Slug, Path: m.Path, Date: m.DisplayTime().Format(time.RFC3339),
+			ID: m.ID(), Slug: m.Slug, Title: m.DisplayTitle(), Path: m.Path, Date: m.DisplayTime().Format(time.RFC3339),
 			Tags: nonNil(m.Tags), Sources: nonNil(m.Sources), Lines: nonNil(m.Lines), SupersededBy: m.SupersededBy,
 			Body: strings.TrimSpace(m.Body),
 		})

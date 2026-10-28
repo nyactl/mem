@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var newTitle string
 var newLabels []string
 var newSources []string
 var newFiles []string
@@ -28,95 +29,92 @@ var newCmd = &cobra.Command{
 
   mem new "ran into an interesting paper on indexing #research"
   mem new "kafka rebalance" "consumer group blocks all partitions for ~2min"
+  mem new --title "C++" "templates are Turing-complete"
   mem new "meeting went sideways" -t work -t ops -d 2024-03-15
   mem new "kafka rebalance" "now about 30s with cooperative rebalancing" --supersedes kafka-rebalance
 
 One argument:  slug is derived from the first few words of the content.
-Two arguments: first is the title (sets the slug), second is the body.`,
+Two arguments, or --title: the title is kept as typed in the note and sets the slug,
+the file name keeps only its letters and digits.`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg := config.Load()
-		ts := time.Now()
-
-		var slug, body string
-		if len(args) == 1 {
-			body = strings.TrimSpace(args[0])
-			slug = note.Slugify(firstWords(stripInlineMarkers(body), 4))
-		} else {
-			slug = note.Slugify(args[0])
-			body = strings.TrimSpace(args[1])
-		}
-
-		if slug == "" {
-			slug = "note"
-		}
-		if body == "" {
-			return fmt.Errorf("content cannot be empty")
-		}
-
-		var attachmentPaths []string
-		for _, f := range newFiles {
-			dst, err := attachment.Store(f, ts, cfg.AttachmentsDir)
-			if err != nil {
-				return fmt.Errorf("attach %s: %w", f, err)
+		title, body := newTitle, args[0]
+		if len(args) == 2 {
+			if title != "" {
+				return fmt.Errorf("give the title either as --title or as the first argument")
 			}
-			attachmentPaths = append(attachmentPaths, dst)
-			fmt.Fprintf(os.Stderr, "attached → %s\n", dst)
+			title, body = args[0], args[1]
 		}
-
-		sluggedSources := make([]string, 0, len(newSources))
-		for _, s := range newSources {
-			if sl := note.Slugify(s); sl != "" {
-				sluggedSources = append(sluggedSources, sl)
-			}
-		}
-
-		for _, old := range newSupersedes {
-			n, err := note.FindByIDOrSlug(cfg.NotesDir, old)
-			if err != nil {
-				return fmt.Errorf("--supersedes: %w", err)
-			}
-			sluggedSources = append(sluggedSources, note.SupersedesPrefix+strings.ToLower(n.ID()))
-		}
-
-		allTags := note.MergeTags(newLabels, note.ExtractInlineTags(body))
-		allSources := note.MergeSources(sluggedSources, note.ExtractInlineSources(body))
-
-		var date *time.Time
-		if newDate != "" {
-			formats := []string{
-				time.RFC3339,
-				"2006-01-02T15:04:05",
-				"2006-01-02T15:04",
-				"2006-01-02 15:04:05",
-				"2006-01-02 15:04",
-				"2006-01-02",
-			}
-			var parsed time.Time
-			var perr error
-			for _, f := range formats {
-				if parsed, perr = time.ParseInLocation(f, newDate, time.Local); perr == nil {
-					break
-				}
-			}
-			if perr != nil {
-				return fmt.Errorf("--date %q: unrecognised datetime format", newDate)
-			}
-			date = &parsed
-		}
-
-		path := uniquePath(cfg.NotesDir, ts, slug)
-		content := note.BuildFrontmatter(allTags, allSources, attachmentPaths, date) + body + "\n"
-		if err := note.WriteRaw(path, content); err != nil {
+		n, err := addNote(config.Load(), title, body, newLabels, newSources, newFiles, newDate, newSupersedes)
+		if err != nil {
 			return err
 		}
-
-		n, _ := note.Parse(path)
-		fmt.Printf("%s  %s\n", n.Created.Format("15:04:05"), n.Slug)
-
-		_, _ = index.Rebuild(cfg.NotesDir)
+		fmt.Printf("%s  %s\n", n.Created.Format("15:04:05"), n.DisplayTitle())
 		return nil
 	},
+}
+
+// addNote writes a new note. Without a title its slug comes from the first words of the body.
+func addNote(cfg config.Config, title, body string, tags, sources, files []string, date string, supersedes []string) (note.Note, error) {
+	ts := time.Now()
+	title = note.CleanTitle(title)
+	body = strings.TrimSpace(body)
+
+	slug := note.Slugify(title)
+	if title == "" {
+		slug = note.Slugify(firstWords(stripInlineMarkers(body), 4))
+	}
+	if slug == "" {
+		slug = "note"
+	}
+	if body == "" {
+		return note.Note{}, fmt.Errorf("content cannot be empty")
+	}
+
+	var attachmentPaths []string
+	for _, f := range files {
+		dst, err := attachment.Store(f, ts, cfg.AttachmentsDir)
+		if err != nil {
+			return note.Note{}, fmt.Errorf("attach %s: %w", f, err)
+		}
+		attachmentPaths = append(attachmentPaths, dst)
+		fmt.Fprintf(os.Stderr, "attached → %s\n", dst)
+	}
+
+	sluggedSources := make([]string, 0, len(sources))
+	for _, s := range sources {
+		if sl := note.Slugify(s); sl != "" {
+			sluggedSources = append(sluggedSources, sl)
+		}
+	}
+
+	for _, old := range supersedes {
+		n, err := note.FindByIDOrSlug(cfg.NotesDir, old)
+		if err != nil {
+			return note.Note{}, fmt.Errorf("--supersedes: %w", err)
+		}
+		sluggedSources = append(sluggedSources, note.SupersedesPrefix+strings.ToLower(n.ID()))
+	}
+
+	allTags := note.MergeTags(tags, note.ExtractInlineTags(body))
+	allSources := note.MergeSources(sluggedSources, note.ExtractInlineSources(body))
+
+	var displayDate *time.Time
+	if date != "" {
+		parsed, ok := note.ParseDateTime(date)
+		if !ok {
+			return note.Note{}, fmt.Errorf("--date %q: unrecognised datetime format", date)
+		}
+		displayDate = parsed
+	}
+
+	path := uniquePath(cfg.NotesDir, ts, slug)
+	content := note.BuildFrontmatter(title, allTags, allSources, attachmentPaths, displayDate) + body + "\n"
+	if err := note.WriteRaw(path, content); err != nil {
+		return note.Note{}, err
+	}
+	_, _ = index.Rebuild(cfg.NotesDir)
+	return note.Parse(path)
 }
 
 // uniquePath is the path for a new note, its slug numbered when another note took it that second.
@@ -143,6 +141,7 @@ func firstWords(s string, n int) string {
 }
 
 func init() {
+	newCmd.Flags().StringVar(&newTitle, "title", "", "title, kept as typed; the slug is made from it")
 	newCmd.Flags().StringArrayVarP(&newLabels, "tag", "t", nil, "tag, repeatable")
 	newCmd.Flags().StringArrayVarP(&newSources, "source", "s", nil, "source, repeatable")
 	newCmd.Flags().StringArrayVarP(&newFiles, "file", "f", nil, "attach file, repeatable")

@@ -10,8 +10,8 @@ import (
 // A source syncs like any other, so the older note itself is never touched.
 const SupersedesPrefix = "supersedes-"
 
-// Query selects notes: every term must appear (case-insensitive) in the slug, tags, sources or
-// body, every tag must be on the note, and its display time must fall within Since and Until.
+// Query selects notes: every term must appear (case-insensitive) in the title, slug, tags, sources
+// or body, every tag must be on the note, and its display time must fall within Since and Until.
 type Query struct {
 	Terms []string
 	Tags  []string
@@ -54,7 +54,7 @@ func Search(notes []Note, q Query) []Match {
 		if len(supersededBy[key]) > 0 && !q.All {
 			continue
 		}
-		text := strings.ToLower(n.Slug + "\n" + strings.Join(n.Tags, " ") + "\n" + strings.Join(n.Sources, " ") + "\n" + n.Body)
+		text := strings.ToLower(n.Title + "\n" + n.Slug + "\n" + strings.Join(n.Tags, " ") + "\n" + strings.Join(n.Sources, " ") + "\n" + n.Body)
 		found := true
 		for _, t := range terms {
 			found = found && strings.Contains(text, t)

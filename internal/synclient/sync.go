@@ -83,14 +83,15 @@ func (c *Client) saveState(s syncState) {
 // ── remote note types (mirrors server's JSON) ─────────────────────────────
 
 type remoteNote struct {
-	ID      string   `json:"id"`
-	Slug    string   `json:"slug"`
-	Created string   `json:"created"`
-	Date    string   `json:"date,omitempty"`
-	Tags    []string `json:"tags"`
-	Sources []string `json:"sources"`
-	Body    string   `json:"body"`
-	ETag    string   `json:"etag"`
+	ID           string   `json:"id"`
+	Slug         string   `json:"slug"`
+	DisplayTitle string   `json:"display_title,omitempty"`
+	Created      string   `json:"created"`
+	Date         string   `json:"date,omitempty"`
+	Tags         []string `json:"tags"`
+	Sources      []string `json:"sources"`
+	Body         string   `json:"body"`
+	ETag         string   `json:"etag"`
 }
 
 // ── Pull ──────────────────────────────────────────────────────────────────
@@ -191,6 +192,17 @@ func (c *Client) Push() (created, updated, deleted int, conflicts []string, err 
 		localETag, _ := note.ETag(n.Path)
 		rn, exists := remoteByID[n.ID()]
 
+		// A client older than titles drops them when it writes a note, and the server keeps them;
+		// without taking the title back the two never match and the note is pushed on every sync.
+		adopted := false
+		if exists && n.Title == "" && rn.DisplayTitle != "" {
+			if err := note.SetTitle(n.Path, rn.DisplayTitle); err == nil {
+				n.Title = rn.DisplayTitle
+				localETag, _ = note.ETag(n.Path)
+				adopted = true
+			}
+		}
+
 		if !exists {
 			serverETag, pushErr := c.createRemote(n)
 			if pushErr != nil {
@@ -205,6 +217,9 @@ func (c *Client) Push() (created, updated, deleted int, conflicts []string, err 
 		}
 
 		if localETag == rn.ETag {
+			if adopted {
+				state.Notes[n.ID()] = noteState{ServerETag: rn.ETag, LocalETag: localETag}
+			}
 			continue // identical content
 		}
 
@@ -334,6 +349,9 @@ func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 		"sources": orEmpty(n.Sources),
 		"created": n.Created.UTC().Format(time.RFC3339),
 	}
+	if n.Title != "" {
+		payload["display_title"] = n.Title
+	}
 	if n.Date != nil {
 		payload["date"] = n.Date.UTC().Format(time.RFC3339)
 	}
@@ -374,6 +392,9 @@ func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag str
 		"body":    bodyText,
 		"tags":    orEmpty(n.Tags),
 		"sources": orEmpty(n.Sources),
+	}
+	if n.Title != "" {
+		payload["display_title"] = n.Title
 	}
 	if n.Date != nil {
 		payload["date"] = n.Date.UTC().Format(time.RFC3339)
@@ -430,7 +451,7 @@ func (c *Client) writeLocal(rn remoteNote) error {
 			date = &d
 		}
 	}
-	content := note.BuildFrontmatter(rn.Tags, rn.Sources, nil, date) + rn.Body
+	content := note.BuildFrontmatter(rn.DisplayTitle, rn.Tags, rn.Sources, nil, date) + rn.Body
 	return note.WriteRaw(path, content)
 }
 

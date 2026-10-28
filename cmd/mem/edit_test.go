@@ -20,13 +20,13 @@ func useEditor(t *testing.T, body string) {
 	t.Setenv("EDITOR", script)
 }
 
-// dated writes a note with a date, tags, a source, an attachment and a supersedes source, as a
+// dated writes a note with a title, a date, tags, a source, an attachment and a supersedes source, as a
 // finding has them.
 func dated(t *testing.T, dir string) note.Note {
 	t.Helper()
 	day := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)
 	path := note.FilePath(dir, time.Date(2026, 10, 27, 8, 0, 0, 0, time.Local), "finding")
-	fm := note.BuildFrontmatter([]string{"kb", "work"}, []string{"agentdeck", "supersedes-20261001t000000-older"}, []string{"x.png"}, &day)
+	fm := note.BuildFrontmatter("Finding: C++", []string{"kb", "work"}, []string{"agentdeck", "supersedes-20261001t000000-older"}, []string{"x.png"}, &day)
 	if err := note.WriteRaw(path, fm+"first line\nsecond line\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +58,9 @@ func TestEditNoteKeepsDate(t *testing.T) {
 	}
 	if strings.Join(got.Tags, ",") != "kb,work,extra" || strings.Join(got.Attachments, ",") != "x.png" {
 		t.Errorf("tags %v attachments %v", got.Tags, got.Attachments)
+	}
+	if got.Title != "Finding: C++" {
+		t.Errorf("title = %q", got.Title)
 	}
 }
 

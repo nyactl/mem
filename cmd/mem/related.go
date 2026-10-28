@@ -38,7 +38,7 @@ var relatedCmd = &cobra.Command{
 		}
 
 		if len(target.Tags) == 0 {
-			fmt.Fprintf(os.Stderr, "%s has no tags — nothing to relate on\n", target.Slug)
+			fmt.Fprintf(os.Stderr, "%s has no tags — nothing to relate on\n", target.DisplayTitle())
 			return nil
 		}
 
@@ -68,7 +68,7 @@ var relatedCmd = &cobra.Command{
 		}
 
 		if len(candidates) == 0 {
-			fmt.Fprintf(os.Stderr, "no related notes found for %s\n", target.Slug)
+			fmt.Fprintf(os.Stderr, "no related notes found for %s\n", target.DisplayTitle())
 			return nil
 		}
 

@@ -198,7 +198,7 @@ func runPicker(notes []note.Note, browse bool) (note.Note, error) {
 // pickerLine is a note's line in the picker: its path, which fzf hides, then its date (the one
 // notes are sorted by), slug and dimmed tags.
 func pickerLine(n note.Note) string {
-	line := n.Path + "\t" + n.DisplayTime().Format("2006-01-02") + " " + n.Slug
+	line := n.Path + "\t" + n.DisplayTime().Format("2006-01-02") + " " + n.DisplayTitle()
 	if len(n.Tags) > 0 {
 		line += " \x1b[2m#" + strings.Join(n.Tags, " #") + "\x1b[0m"
 	}
@@ -222,6 +222,9 @@ func slugCompleter(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	out := make([]string, len(notes))
 	for i, n := range notes {
 		meta := n.CreatedStr() + " [" + strings.Join(n.Tags, ", ") + "]"
+		if n.Title != "" {
+			meta = n.Title + " " + meta
+		}
 		if len(n.Sources) > 0 {
 			meta += " @" + strings.Join(n.Sources, ", @")
 		}

@@ -123,13 +123,14 @@ func eqConstant(a, b string) bool {
 // ── API types ──────────────────────────────────────────────────────────────
 
 type noteItem struct {
-	ID      string   `json:"id"`
-	Slug    string   `json:"slug"`
-	Created string   `json:"created"`
-	Date    string   `json:"date,omitempty"`
-	Tags    []string `json:"tags"`
-	Sources []string `json:"sources"`
-	ETag    string   `json:"etag"`
+	ID           string   `json:"id"`
+	Slug         string   `json:"slug"`
+	DisplayTitle string   `json:"display_title,omitempty"`
+	Created      string   `json:"created"`
+	Date         string   `json:"date,omitempty"`
+	Tags         []string `json:"tags"`
+	Sources      []string `json:"sources"`
+	ETag         string   `json:"etag"`
 }
 
 type noteDetail struct {
@@ -137,20 +138,25 @@ type noteDetail struct {
 	Body string `json:"body"`
 }
 
+// createRequest's title is what the slug is made from; sync clients send the slug there, so it is
+// never taken as the note's title. display_title is the title kept in the note.
 type createRequest struct {
-	Title   string   `json:"title"`
-	Body    string   `json:"body"`
-	Tags    []string `json:"tags"`
-	Sources []string `json:"sources"`
-	Created string   `json:"created"` // RFC3339 UTC; use client time for offline capture
-	Date    string   `json:"date,omitempty"`
+	Title        string   `json:"title"`
+	DisplayTitle string   `json:"display_title,omitempty"`
+	Body         string   `json:"body"`
+	Tags         []string `json:"tags"`
+	Sources      []string `json:"sources"`
+	Created      string   `json:"created"` // RFC3339 UTC; use client time for offline capture
+	Date         string   `json:"date,omitempty"`
 }
 
+// updateRequest without a display_title keeps the note's title: clients older than titles send none.
 type updateRequest struct {
-	Body    string   `json:"body"`
-	Tags    []string `json:"tags"`
-	Sources []string `json:"sources"`
-	Date    string   `json:"date,omitempty"`
+	DisplayTitle string   `json:"display_title,omitempty"`
+	Body         string   `json:"body"`
+	Tags         []string `json:"tags"`
+	Sources      []string `json:"sources"`
+	Date         string   `json:"date,omitempty"`
 }
 
 type ingestRequest struct {
@@ -219,7 +225,7 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := filepath.Join(s.notesDir, note.Filename(ts, slug))
-	content := note.BuildFrontmatter(allTags, allSources, nil, createDate) + req.Body
+	content := note.BuildFrontmatter(req.DisplayTitle, allTags, allSources, nil, createDate) + req.Body
 	if err := note.WriteRaw(path, content); err != nil {
 		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
@@ -302,7 +308,11 @@ func (s *Server) updateNote(w http.ResponseWriter, r *http.Request, id string) {
 	} else {
 		updateDate = n.Date
 	}
-	content := note.BuildFrontmatter(allTags, allSources, n.Attachments, updateDate) + req.Body
+	title := n.Title
+	if req.DisplayTitle != "" {
+		title = req.DisplayTitle
+	}
+	content := note.BuildFrontmatter(title, allTags, allSources, n.Attachments, updateDate) + req.Body
 	if err := note.WriteRaw(n.Path, content); err != nil {
 		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
@@ -407,7 +417,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	allSources := note.MergeSources(req.From, note.ExtractInlineSources(req.Body)) // from → sources
 
 	path := filepath.Join(s.notesDir, note.Filename(ts, slug))
-	content := note.BuildFrontmatter(allTags, allSources, nil, nil) + req.Body
+	content := note.BuildFrontmatter(req.Title, allTags, allSources, nil, nil) + req.Body
 	if err := note.WriteRaw(path, content); err != nil {
 		jsonWrite(w, http.StatusInternalServerError, errBody(err))
 		return
@@ -436,12 +446,13 @@ func errBody(err error) map[string]string { return map[string]string{"error": er
 
 func toItem(n note.Note, etag string) noteItem {
 	item := noteItem{
-		ID:      n.ID(),
-		Slug:    n.Slug,
-		Created: n.Created.UTC().Format(time.RFC3339),
-		Tags:    orEmpty(n.Tags),
-		Sources: orEmpty(n.Sources),
-		ETag:    etag,
+		ID:           n.ID(),
+		Slug:         n.Slug,
+		DisplayTitle: n.Title,
+		Created:      n.Created.UTC().Format(time.RFC3339),
+		Tags:         orEmpty(n.Tags),
+		Sources:      orEmpty(n.Sources),
+		ETag:         etag,
 	}
 	if n.Date != nil {
 		item.Date = n.Date.UTC().Format(time.RFC3339)

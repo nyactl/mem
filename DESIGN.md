@@ -20,9 +20,10 @@ Config: `$XDG_CONFIG_HOME/mem/config.json` → `~/.config/mem/config.json`
 
 **Filename:** `20260511T143022-kafka-rebalance.md`
 
-The slug in the filename is the title. It does not appear again inside the
-file — no `# Heading`, no `title:` field. Timestamp prefix is the sole source
-of creation time.
+The slug in the filename is the note's identity. A slug keeps only letters and
+digits (`C++` → `c`, `.NET` → `net`), so a title given at capture is kept as typed
+in a `title:` field; without one the slug is the title. Timestamp prefix is the
+sole source of creation time.
 
 **Frontmatter** (tool-managed, never shown to the human):
 
@@ -44,7 +45,7 @@ protocol. Fix: switch to cooperative-sticky assignor. Confirmed by @kate.
 - `from` — omitted if none; list of entity UUIDs (registry maps UUID → slug)
 - `links` — omitted if none; list of note UUIDs for `[[wiki-links]]` in prose
 - `attachments` — omitted if none; absolute paths
-- Nothing else — no `created`, no `updated`, no `title`
+- Nothing else — no `created`, no `updated`
 
 The prose body always uses human-readable slugs — `@kate`, `[[kafka-session-timeout]]`,
 `#kafka`. Frontmatter stores UUIDs. `FinalizeNote` resolves slugs to UUIDs via

@@ -37,7 +37,7 @@ func Note(n note.Note, width int, preview bool) (string, error) {
 	if len(n.Sources) > 0 {
 		meta = append(meta, "@"+strings.Join(n.Sources, " @"))
 	}
-	md := "# " + n.Slug + "\n\n" + strings.Join(meta, " · ") + "\n\n" + Diagrams(n.Body, width-codeMargin, preview)
+	md := "# " + n.DisplayTitle() + "\n\n" + strings.Join(meta, " · ") + "\n\n" + Diagrams(n.Body, width-codeMargin, preview)
 	return Markdown(md, width)
 }
 

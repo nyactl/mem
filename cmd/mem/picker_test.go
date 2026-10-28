@@ -33,8 +33,8 @@ func TestSupersedeNote(t *testing.T) {
 	if got := strings.Join(nn.Sources, ","); got != want {
 		t.Errorf("sources = %s, want %s", got, want)
 	}
-	if strings.Join(nn.Tags, ",") != "kb,work" || strings.Join(nn.Attachments, ",") != "x.png" {
-		t.Errorf("tags %v attachments %v", nn.Tags, nn.Attachments)
+	if strings.Join(nn.Tags, ",") != "kb,work" || strings.Join(nn.Attachments, ",") != "x.png" || nn.Title != n.Title {
+		t.Errorf("tags %v attachments %v title %q", nn.Tags, nn.Attachments, nn.Title)
 	}
 	all, _ := note.List(dir)
 	if m := note.Search(all, note.Query{}); len(m) != 1 || m[0].Path != nn.Path {

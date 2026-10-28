@@ -47,7 +47,7 @@ var deleteCmd = &cobra.Command{
 
 // deleteNote deletes n after asking on stdin and reports whether it did.
 func deleteNote(notesDir string, n note.Note) (bool, error) {
-	fmt.Fprintf(os.Stderr, "delete %s? [y/N] ", n.Slug)
+	fmt.Fprintf(os.Stderr, "delete %s? [y/N] ", n.DisplayTitle())
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	if strings.ToLower(strings.TrimSpace(line)) != "y" {
 		fmt.Fprintln(os.Stderr, "cancelled")
@@ -62,7 +62,7 @@ func deleteNote(notesDir string, n note.Note) (bool, error) {
 	// mem sync push propagates the deletion to the server.
 
 	_, _ = index.Rebuild(notesDir)
-	fmt.Fprintf(os.Stderr, "deleted %s\n", n.Slug)
+	fmt.Fprintf(os.Stderr, "deleted %s\n", n.DisplayTitle())
 	return true, nil
 }
 

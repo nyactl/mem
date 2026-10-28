@@ -263,6 +263,19 @@ required; the VPN provides transport security.
 
 ---
 
+## 13. A title travels as `display_title`, apart from the slug
+
+**Decision:** the frontmatter's `title:` field is `display_title` in the API: in note
+listings and details, and in create and update requests. `title` in a create request
+keeps its meaning, the text the slug is made from.
+
+**Why:** sync clients send the slug as `title`, so the ID they create matches the
+local file; a server reading it as the title would store `title: c-2` for `C++`.
+Older servers ignore `display_title`, older clients never send it. An update without
+it keeps the note's title, so an older client editing a note does not drop it.
+
+---
+
 ## Open decisions (not yet resolved)
 
 | # | Question | Options | Blocking? |

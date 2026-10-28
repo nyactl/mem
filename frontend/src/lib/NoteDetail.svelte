@@ -84,7 +84,7 @@
   <header>
     <button class="back" onclick={onback}>← back</button>
     {#if note}
-      <span class="slug">{note.slug}</span>
+      <span class="slug">{note.display_title || note.slug}</span>
     {/if}
     <div class="spacer"></div>
     {#if note}

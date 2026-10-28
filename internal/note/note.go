@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,6 +18,7 @@ const tsFormat = "20060102T150405"
 type Note struct {
 	Path        string
 	Slug        string
+	Title       string // as typed; empty for notes written before titles were kept
 	Created     time.Time
 	Date        *time.Time // frontmatter override; nil = use Created
 	Tags        []string
@@ -40,6 +42,14 @@ func (n Note) DisplayTime() time.Time {
 // ambiguity when multiple notes are created within the same second.
 func (n Note) ID() string {
 	return n.Created.Format(tsFormat) + "-" + n.Slug
+}
+
+// DisplayTitle is the note's title, or its slug for a note without one.
+func (n Note) DisplayTitle() string {
+	if n.Title != "" {
+		return n.Title
+	}
+	return n.Slug
 }
 
 func (n Note) CreatedStr() string {
@@ -87,10 +97,10 @@ func SetBody(path, body string) error {
 	if err != nil {
 		return err
 	}
-	tags, sources, attachments, date, _ := parseFrontmatter(string(data))
+	title, tags, sources, attachments, date, _ := parseFrontmatter(string(data))
 	tags = mergeTags(tags, extractInlineTags(body))
 	sources = mergeSources(sources, extractInlineSources(body))
-	return WriteRaw(path, buildFrontmatter(tags, sources, attachments, date)+strings.TrimRight(body, "\n")+"\n")
+	return WriteRaw(path, buildFrontmatter(title, tags, sources, attachments, date)+strings.TrimRight(body, "\n")+"\n")
 }
 
 var reInlineTag = regexp.MustCompile(`(?:^|[^#\w])#([a-z][a-z0-9-]*)`)
@@ -115,13 +125,23 @@ func SetDate(path string, date *time.Time) error {
 	if err != nil {
 		return err
 	}
-	tags, sources, attachments, _, body := parseFrontmatter(string(data))
-	return WriteRaw(path, buildFrontmatter(tags, sources, attachments, date)+body)
+	title, tags, sources, attachments, _, body := parseFrontmatter(string(data))
+	return WriteRaw(path, buildFrontmatter(title, tags, sources, attachments, date)+body)
+}
+
+// SetTitle writes or replaces the title: field in a note's frontmatter.
+func SetTitle(path, title string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	_, tags, sources, attachments, date, body := parseFrontmatter(string(data))
+	return WriteRaw(path, buildFrontmatter(title, tags, sources, attachments, date)+strings.TrimRight(body, "\n")+"\n")
 }
 
 // BuildFrontmatter is the exported form of buildFrontmatter.
-func BuildFrontmatter(tags, sources, attachments []string, date *time.Time) string {
-	return buildFrontmatter(tags, sources, attachments, date)
+func BuildFrontmatter(title string, tags, sources, attachments []string, date *time.Time) string {
+	return buildFrontmatter(title, tags, sources, attachments, date)
 }
 
 // FormatTS formats a time as the note ID timestamp string.
@@ -189,10 +209,11 @@ func Parse(path string) (Note, error) {
 	if err != nil {
 		return Note{}, err
 	}
-	tags, sources, attachments, date, body := parseFrontmatter(string(data))
+	title, tags, sources, attachments, date, body := parseFrontmatter(string(data))
 	return Note{
 		Path:        path,
 		Slug:        slug,
+		Title:       title,
 		Created:     ts,
 		Date:        date,
 		Tags:        tags,
@@ -264,9 +285,9 @@ func UpdateAttachments(path string, newAttachments []string) error {
 	if err != nil {
 		return err
 	}
-	tags, sources, existing, date, body := parseFrontmatter(string(data))
+	title, tags, sources, existing, date, body := parseFrontmatter(string(data))
 	merged := append(existing, newAttachments...)
-	content := buildFrontmatter(tags, sources, merged, date) + body + "\n"
+	content := buildFrontmatter(title, tags, sources, merged, date) + body + "\n"
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
@@ -349,9 +370,12 @@ func parseFilename(base string) (time.Time, string, error) {
 	return ts, base[16:], nil
 }
 
-func buildFrontmatter(tags []string, sources []string, attachments []string, date *time.Time) string {
+func buildFrontmatter(title string, tags []string, sources []string, attachments []string, date *time.Time) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
+	if title = CleanTitle(title); title != "" {
+		sb.WriteString("title: " + yamlString(title) + "\n")
+	}
 	if date != nil {
 		// Always UTC: the same note written on hosts in different zones must
 		// produce identical bytes, or sync sees a change that is not one and
@@ -373,7 +397,7 @@ func buildFrontmatter(tags []string, sources []string, attachments []string, dat
 	return sb.String()
 }
 
-func parseFrontmatter(content string) (tags []string, sources []string, attachments []string, date *time.Time, body string) {
+func parseFrontmatter(content string) (title string, tags []string, sources []string, attachments []string, date *time.Time, body string) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	inFM, first, afterFM := false, true, false
 	var bodyLines []string
@@ -396,7 +420,9 @@ func parseFrontmatter(content string) (tags []string, sources []string, attachme
 			continue
 		}
 		if inFM {
-			if strings.HasPrefix(line, "tags:") {
+			if strings.HasPrefix(line, "title:") {
+				title = CleanTitle(unquoteYAML(strings.TrimSpace(strings.TrimPrefix(line, "title:"))))
+			} else if strings.HasPrefix(line, "tags:") {
 				tags = parseInlineList(line)
 			} else if strings.HasPrefix(line, "sources:") {
 				sources = parseInlineList(line)
@@ -459,4 +485,45 @@ func parseInlineList(line string) []string {
 		}
 	}
 	return out
+}
+
+// CleanTitle is a title as a note keeps it: on one line, without surrounding space.
+func CleanTitle(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// yamlString writes s as a YAML scalar, plain where a YAML reader would read it back as the same
+// string, double-quoted where it would read something else: a list, a comment, a number, true.
+func yamlString(s string) string {
+	if s == "" || strings.ContainsAny(s[:1], "-?:,[]{}#&*!|>'\"%@`") ||
+		strings.Contains(s, ": ") || strings.Contains(s, " #") || strings.HasSuffix(s, ":") ||
+		yamlNonString[strings.ToLower(s)] {
+		return strconv.Quote(s)
+	}
+	if _, err := strconv.ParseFloat(strings.ReplaceAll(s, "_", ""), 64); err == nil || reYAMLNonString.MatchString(s) {
+		return strconv.Quote(s)
+	}
+	return s
+}
+
+// reYAMLNonString matches what YAML reads as a number or date though ParseFloat does not: 0o17,
+// 0x1f, 0b101, base 60 (12:30 in YAML 1.1), 2026-10-28.
+var reYAMLNonString = regexp.MustCompile(`^[-+]?(0[oxb][0-9a-fA-F_]+|[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?)$|^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}`)
+
+var yamlNonString = map[string]bool{
+	"true": true, "false": true, "yes": true, "no": true, "on": true, "off": true, "y": true, "n": true,
+	"null": true, "~": true, ".inf": true, "-.inf": true, ".nan": true,
+}
+
+// unquoteYAML reads a YAML scalar on one line: double-quoted, single-quoted or plain.
+func unquoteYAML(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		if u, err := strconv.Unquote(s); err == nil {
+			return u
+		}
+	}
+	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
+		return strings.ReplaceAll(s[1:len(s)-1], "''", "'")
+	}
+	return s
 }

@@ -19,6 +19,7 @@ func TestSearch(t *testing.T) {
 		{Slug: "kafka-rebalance", Created: *day("2026-09-01"), Tags: []string{"kb"}, Sources: []string{"supersedes-20260701t000000-kafka-rebalance"},
 			Body: "Cooperative rebalance: about 30 s."},
 		{Slug: "private", Created: *day("2026-08-21"), Tags: []string{"diary"}, Body: "The parser of my thoughts."},
+		{Slug: "c", Title: "C++", Created: *day("2026-06-01"), Tags: []string{"glossary"}, Body: "a language"},
 	}
 	slugs := func(ms []Match) string {
 		var s []string
@@ -43,6 +44,7 @@ func TestSearch(t *testing.T) {
 		{"until", Query{Tags: []string{"kb"}, Until: day("2026-08-20"), All: true}, "kafka-rebalance"},
 		{"window", Query{Since: day("2026-08-01"), Until: day("2026-08-31")}, "parser-port private"},
 		{"no match", Query{Terms: []string{"parser", "kafka"}}, ""},
+		{"title", Query{Terms: []string{"c++"}}, "c"},
 	} {
 		if got := slugs(Search(notes, c.q)); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)

@@ -36,7 +36,7 @@
       loading = true
       try {
         const n = await api.note(id)
-        title   = n.slug || n.id || ''
+        title   = n.display_title || n.slug || n.id || ''
         body    = n.body || ''
         tagsRaw = (n.tags || []).join(' ')
         etag    = n.etag || ''
@@ -132,10 +132,11 @@
         await api.update(id, payload, etag)
         onsave(id)
       } else {
-        const slug = title.trim()
-        if (!slug) { error = 'Title is required.'; saving = false; return }
+        const typed = title.trim()
+        if (!typed) { error = 'Title is required.'; saving = false; return }
         const payload = {
-          title:   slug,
+          title:         typed,
+          display_title: typed,
           body,
           tags:    parseTags(tagsRaw),
           sources: [],

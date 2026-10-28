@@ -34,7 +34,7 @@ func supersedeNote(notesDir string, n note.Note) (note.Note, error) {
 	sources = note.MergeSources(sources, note.ExtractInlineSources(body))
 
 	path := uniquePath(notesDir, time.Now(), n.Slug)
-	if err := note.WriteRaw(path, note.BuildFrontmatter(tags, sources, n.Attachments, nil)+body+"\n"); err != nil {
+	if err := note.WriteRaw(path, note.BuildFrontmatter(n.Title, tags, sources, n.Attachments, nil)+body+"\n"); err != nil {
 		return note.Note{}, err
 	}
 	_, _ = index.Rebuild(notesDir)

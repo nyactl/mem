@@ -80,7 +80,7 @@ past — mem day will file it under the day it actually occurred.
 				tags = "  #" + joinStr(n.Tags, " #")
 			}
 			firstLine := firstNonEmpty(n.Body)
-			fmt.Printf("%s  %-32s %s%s\n", timeStr, firstLine, n.Slug, tags)
+			fmt.Printf("%s  %-32s %s%s\n", timeStr, firstLine, n.DisplayTitle(), tags)
 		}
 		return nil
 	},
