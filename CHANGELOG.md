@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.2] - 2026-10-31
+
+### Bug Fixes
+
+- Update logrus to 1.9.1 and golang.org/x/net to 0.55.0
+- Update mermaid to 12.2 for katex 0.18.10 and rebuild the web UI
+
+
 ## [0.7.1] - 2026-10-31
 
 ### Bug Fixes
