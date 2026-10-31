@@ -168,7 +168,8 @@ func (c *Client) Pull() (created, updated int, conflicts []string, err error) {
 
 // Push uploads local notes that the server does not have or that differ
 // from the server's version, and deletes remote notes that no longer exist locally.
-func (c *Client) Push() (created, updated, deleted int, conflicts []string, err error) {
+// A note with problems (see note.Check) is not uploaded, and is returned in refused.
+func (c *Client) Push() (created, updated, deleted int, conflicts []string, refused []note.Problem, err error) {
 	local, err := note.List(c.dir)
 	if err != nil {
 		return
@@ -189,6 +190,14 @@ func (c *Client) Push() (created, updated, deleted int, conflicts []string, err 
 	for _, n := range local {
 		localIDs[n.ID()] = true
 
+		if problems, checkErr := note.Check(n.Path); checkErr != nil || len(problems) > 0 {
+			if checkErr != nil {
+				problems = []note.Problem{{Path: n.Path, Msg: checkErr.Error()}}
+			}
+			refused = append(refused, problems...)
+			continue
+		}
+
 		localETag, _ := note.ETag(n.Path)
 		rn, exists := remoteByID[n.ID()]
 
@@ -205,6 +214,10 @@ func (c *Client) Push() (created, updated, deleted int, conflicts []string, err 
 
 		if !exists {
 			serverETag, pushErr := c.createRemote(n)
+			if r, ok := pushErr.(refusedError); ok {
+				refused = append(refused, note.Problem{Path: n.Path, Msg: "refused by the server: " + r.msg})
+				continue
+			}
 			if pushErr != nil {
 				err = pushErr
 				return
@@ -227,6 +240,10 @@ func (c *Client) Push() (created, updated, deleted int, conflicts []string, err 
 		if pushErr != nil {
 			if isConflict(pushErr) {
 				conflicts = append(conflicts, n.ID())
+				continue
+			}
+			if r, ok := pushErr.(refusedError); ok {
+				refused = append(refused, note.Problem{Path: n.Path, Msg: "refused by the server: " + r.msg})
 				continue
 			}
 			err = pushErr
@@ -360,6 +377,9 @@ func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 		return "", fmt.Errorf("push create %s: %w", n.ID(), err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusBadRequest {
+		return "", readRefusal(resp)
+	}
 	if resp.StatusCode != http.StatusCreated {
 		return "", c.statusError("push create "+n.ID(), resp)
 	}
@@ -407,6 +427,9 @@ func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag str
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusConflict {
 		return "", conflictErr(n.ID())
+	}
+	if resp.StatusCode == http.StatusBadRequest {
+		return "", readRefusal(resp)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return "", c.statusError("push update "+n.ID(), resp)
@@ -462,6 +485,22 @@ type conflictError struct{ id string }
 func (e conflictError) Error() string { return "conflict: " + e.id }
 func conflictErr(id string) error     { return conflictError{id} }
 func isConflict(err error) bool       { _, ok := err.(conflictError); return ok }
+
+// refusedError is the server turning one note down; push goes on with the others.
+type refusedError struct{ msg string }
+
+func (e refusedError) Error() string { return "refused: " + e.msg }
+
+func readRefusal(resp *http.Response) error {
+	var body struct {
+		Error string `json:"error"`
+	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	if json.Unmarshal(raw, &body) != nil || body.Error == "" {
+		body.Error = strings.TrimSpace(string(raw))
+	}
+	return refusedError{body.Error}
+}
 
 func orEmpty(s []string) []string {
 	if s == nil {

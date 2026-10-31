@@ -168,6 +168,19 @@ List all tags with note counts, merged from notes and tag backend.
 
 Attach one or more files to an existing note.
 
+### `mem doctor [--fix]`
+
+Lists notes that mem would misread, one per line, and exits non-zero when it finds any: a file
+name that is not `<timestamp>-<slug>.md`, a frontmatter that is never closed, unknown keys, tags or
+sources that are not an inline list of lower-case slugs, a `date` that cannot be read, a superseded
+note or an attachment that does not exist. Use it after editing notes by hand or by script.
+
+`--fix` repairs only what is safe (closing an unclosed frontmatter after its keys, slugging tags,
+dropping duplicate tags), shows each change, and leaves the rest to you.
+
+`mem sync` does not push a note with a problem in its file and names it with the reason; the
+server refuses such a note too, so a broken note stays on the machine it was made on.
+
 ---
 
 ## Server

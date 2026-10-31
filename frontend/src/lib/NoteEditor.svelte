@@ -120,7 +120,9 @@
   })
 
   function parseTags(raw) {
-    return raw.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean)
+    return [...new Set(raw.split(/[\s,]+/)
+      .map(t => t.replace(/^#/, '').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/^-+/, ''))
+      .filter(Boolean))]
   }
 
   async function save() {

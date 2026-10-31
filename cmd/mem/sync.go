@@ -6,6 +6,7 @@ import (
 
 	"mem/internal/auth"
 	"mem/internal/config"
+	"mem/internal/note"
 	"mem/internal/synclient"
 
 	"github.com/spf13/cobra"
@@ -43,7 +44,8 @@ mem auth. It is never read from the config file.`,
 		}
 
 		fmt.Fprintf(os.Stderr, "pushing …\n")
-		pcreated, pupdated, pdeleted, pconflicts, err := c.Push()
+		pcreated, pupdated, pdeleted, pconflicts, refused, err := c.Push()
+		reportRefused(refused)
 		if err != nil {
 			return err
 		}
@@ -91,7 +93,8 @@ var syncPushCmd = &cobra.Command{
 		token, _ := auth.Token()
 		c := synclient.New(cfg.ServerURL, token, cfg.NotesDir)
 		fmt.Fprintf(os.Stderr, "pushing to %s …\n", cfg.ServerURL)
-		created, updated, deleted, conflicts, err := c.Push()
+		created, updated, deleted, conflicts, refused, err := c.Push()
+		reportRefused(refused)
 		if err != nil {
 			return err
 		}
@@ -102,6 +105,13 @@ var syncPushCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// reportRefused names each note push left out and why.
+func reportRefused(refused []note.Problem) {
+	for _, p := range refused {
+		fmt.Fprintf(os.Stderr, "  not pushed: %s (fix it, or run mem doctor)\n", p)
+	}
 }
 
 func init() {

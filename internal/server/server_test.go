@@ -43,7 +43,7 @@ func TestTitleSyncsBetweenMachines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if created, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil || created != 2 {
+	if created, _, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil || created != 2 {
 		t.Fatalf("push created %d: %v", created, err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(serverDir, filepath.Base(path))); string(got) != written {
@@ -52,7 +52,7 @@ func TestTitleSyncsBetweenMachines(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(serverDir, filepath.Base(old))); string(got) != "---\ntags: [kb]\n---\nno title\n" {
 		t.Errorf("note without a title came out as\n%s", got)
 	}
-	if _, updated, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil || updated != 0 {
+	if _, updated, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil || updated != 0 {
 		t.Errorf("second push updated %d: %v", updated, err)
 	}
 	if created, _, _, err := synclient.New(srv.URL, "", b).Pull(); err != nil || created != 2 {
@@ -66,7 +66,7 @@ func TestTitleSyncsBetweenMachines(t *testing.T) {
 	if err := note.WriteRaw(path, fixed); err != nil {
 		t.Fatal(err)
 	}
-	if _, updated, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil || updated != 1 {
+	if _, updated, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil || updated != 1 {
 		t.Fatalf("push of a corrected title updated %d: %v", updated, err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(serverDir, filepath.Base(path))); string(got) != fixed {
@@ -118,7 +118,7 @@ func TestPushTakesBackTitleOlderClientDropped(t *testing.T) {
 	if err := note.WriteRaw(filepath.Join(a, name), note.BuildFrontmatter("C++", []string{"glossary"}, nil, nil, nil)+"a language\n"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil {
+	if _, _, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, _, err := synclient.New(srv.URL, "", b).Pull(); err != nil {
@@ -128,7 +128,7 @@ func TestPushTakesBackTitleOlderClientDropped(t *testing.T) {
 	if err := note.WriteRaw(filepath.Join(b, name), "---\ntags: [glossary]\n---\na language, edited\n"); err != nil {
 		t.Fatal(err)
 	}
-	if _, updated, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 1 {
+	if _, updated, _, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 1 {
 		t.Fatalf("push updated %d: %v", updated, err)
 	}
 	want := note.BuildFrontmatter("C++", []string{"glossary"}, nil, nil, nil) + "a language, edited\n"
@@ -137,7 +137,7 @@ func TestPushTakesBackTitleOlderClientDropped(t *testing.T) {
 			t.Errorf("%s holds %q, want %q", dir, got, want)
 		}
 	}
-	if _, updated, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 0 {
+	if _, updated, _, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 0 {
 		t.Errorf("second push updated %d: %v", updated, err)
 	}
 
@@ -146,7 +146,7 @@ func TestPushTakesBackTitleOlderClientDropped(t *testing.T) {
 	if err := note.WriteRaw(filepath.Join(b, name), "---\ntags: [glossary]\n---\na language, edited\n"); err != nil {
 		t.Fatal(err)
 	}
-	if _, updated, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 0 {
+	if _, updated, _, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 0 {
 		t.Errorf("push after the title came back updated %d: %v", updated, err)
 	}
 	if err := note.WriteRaw(filepath.Join(a, name), note.BuildFrontmatter("C++", []string{"glossary"}, nil, nil, nil)+"from a\n"); err != nil {
@@ -155,7 +155,7 @@ func TestPushTakesBackTitleOlderClientDropped(t *testing.T) {
 	if _, _, _, err := synclient.New(srv.URL, "", a).Pull(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil {
+	if _, _, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil {
 		t.Fatal(err)
 	}
 	if _, updated, conflicts, err := synclient.New(srv.URL, "", b).Pull(); err != nil || updated != 1 || len(conflicts) != 0 {

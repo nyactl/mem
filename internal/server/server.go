@@ -202,6 +202,11 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validate(req.Tags, req.Sources, req.Body, req.Created, req.Date); err != nil {
+		jsonWrite(w, http.StatusBadRequest, errBody(err))
+		return
+	}
+
 	ts := time.Now()
 	if req.Created != "" {
 		if t, err := time.Parse(time.RFC3339, req.Created); err == nil {
@@ -294,6 +299,10 @@ func (s *Server) updateNote(w http.ResponseWriter, r *http.Request, id string) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req updateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonWrite(w, http.StatusBadRequest, errBody(err))
+		return
+	}
+	if err := validate(req.Tags, req.Sources, req.Body, "", req.Date); err != nil {
 		jsonWrite(w, http.StatusBadRequest, errBody(err))
 		return
 	}
@@ -399,6 +408,12 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		jsonWrite(w, http.StatusBadRequest, errBody(err))
 		return
 	}
+	// Integrations name tags and sources as they like; they are made slugs, not refused.
+	req.Tags, req.From = slugs(req.Tags), slugs(req.From)
+	if err := validate(req.Tags, req.From, req.Body, req.Created, ""); err != nil {
+		jsonWrite(w, http.StatusBadRequest, errBody(err))
+		return
+	}
 
 	ts := time.Now()
 	if req.Created != "" {
@@ -433,6 +448,41 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+// validate refuses a note the server would store differently from what was sent, or that would
+// spread a broken note to every machine: tags or sources that are not slugs, a date that cannot be
+// read, a frontmatter left in the body.
+func validate(tags, sources []string, body, created, date string) error {
+	for _, t := range tags {
+		if !note.IsSlug(t) {
+			return fmt.Errorf("tag %q is not a slug", t)
+		}
+	}
+	for _, src := range sources {
+		if !note.IsSlug(src) {
+			return fmt.Errorf("source %q is not a slug", src)
+		}
+	}
+	for name, v := range map[string]string{"created": created, "date": date} {
+		if _, err := time.Parse(time.RFC3339, v); v != "" && err != nil {
+			return fmt.Errorf("%s %q is not an RFC 3339 time", name, v)
+		}
+	}
+	if note.LeftoverFrontmatter(body) {
+		return fmt.Errorf("the body begins with a frontmatter: its closing --- is missing")
+	}
+	return nil
+}
+
+func slugs(in []string) []string {
+	var out []string
+	for _, v := range in {
+		if s := note.Slugify(v); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 // jsonWrite sets Content-Type, writes status, then encodes v as JSON.
 // All three happen in order before any body bytes are written.
