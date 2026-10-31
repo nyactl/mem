@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0] - 2026-10-31
+
+### Features
+
+- Mem doctor lists notes with a malformed name or frontmatter, and --fix repairs the safe cases (#33)
+- Mem sync and the server refuse a malformed note with the reason, and the other notes still sync (#33)
+
+
 ## [0.6.0] - 2026-10-28
 
 ### Bug Fixes
