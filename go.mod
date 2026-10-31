@@ -1,6 +1,6 @@
 module mem
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/AlexanderGrooff/mermaid-ascii v0.0.0-20261019220251-5a9df1560871
@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/spf13/cobra v1.10.2
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/term v0.36.0
+	golang.org/x/term v0.43.0
 )
 
 require (
@@ -35,12 +35,12 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/sirupsen/logrus v1.9.0 // indirect
+	github.com/sirupsen/logrus v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )
