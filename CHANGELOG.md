@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1] - 2026-10-31
+
+### Bug Fixes
+
+- The server sends a note's body as stored, so a pulled note is no longer pushed back once (#36)
+
+
 ## [0.7.0] - 2026-10-31
 
 ### Features
