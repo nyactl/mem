@@ -358,7 +358,7 @@ func (c *Client) createRemote(n note.Note) (serverETag string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", n.Path, err)
 	}
-	_, bodyText := splitFrontmatter(string(raw))
+	_, bodyText := note.SplitFrontmatter(string(raw))
 	payload := map[string]any{
 		"title":   n.Slug,
 		"body":    bodyText,
@@ -407,7 +407,7 @@ func (c *Client) updateRemote(n note.Note, serverETag string) (newServerETag str
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", n.Path, err)
 	}
-	_, bodyText := splitFrontmatter(string(raw))
+	_, bodyText := note.SplitFrontmatter(string(raw))
 	payload := map[string]any{
 		"body":    bodyText,
 		"tags":    orEmpty(n.Tags),
@@ -507,16 +507,4 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-func splitFrontmatter(content string) (fm, body string) {
-	if !strings.HasPrefix(content, "---\n") {
-		return "", content
-	}
-	idx := strings.Index(content[4:], "\n---\n")
-	if idx < 0 {
-		return "", content
-	}
-	end := 4 + idx + 5
-	return content[:end], content[end:]
 }

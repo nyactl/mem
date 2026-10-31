@@ -527,3 +527,20 @@ func unquoteYAML(s string) string {
 	}
 	return s
 }
+
+// SplitFrontmatter splits a note file into its frontmatter, closing --- and newline included, and
+// the body exactly as stored. A file without a closed frontmatter is all body.
+func SplitFrontmatter(content string) (fm, body string) {
+	if !strings.HasPrefix(content, "---\n") {
+		return "", content
+	}
+	rest := content[3:] // from the newline that ends the opening ---
+	if idx := strings.Index(rest, "\n---\n"); idx >= 0 {
+		end := 3 + idx + 5
+		return content[:end], content[end:]
+	}
+	if strings.HasSuffix(rest, "\n---") {
+		return content, ""
+	}
+	return "", content
+}

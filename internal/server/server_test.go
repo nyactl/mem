@@ -162,3 +162,37 @@ func TestPushTakesBackTitleOlderClientDropped(t *testing.T) {
 		t.Errorf("pull updated %d conflicts %v: %v", updated, conflicts, err)
 	}
 }
+
+// A pulled note is the server's file byte for byte, final newline or not, so the first push after
+// a pull sends nothing back and the server keeps the note as it was stored.
+func TestPulledNoteMatchesServerByteForByte(t *testing.T) {
+	srv, serverDir := testServer(t)
+	a, b := t.TempDir(), t.TempDir()
+	ts := time.Date(2026, 10, 28, 10, 30, 0, 0, time.Local)
+	files := map[string]string{
+		filepath.Base(note.FilePath(a, ts, "newline")):                  note.BuildFrontmatter("", []string{"kb"}, nil, nil, nil) + "ends with a newline\n",
+		filepath.Base(note.FilePath(a, ts.Add(time.Second), "none")):    note.BuildFrontmatter("", []string{"kb"}, nil, nil, nil) + "ends without one",
+		filepath.Base(note.FilePath(a, ts.Add(2*time.Second), "blank")): note.BuildFrontmatter("T", nil, nil, nil, nil) + "two\n\n",
+	}
+	for name, content := range files {
+		if err := note.WriteRaw(filepath.Join(a, name), content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, _, _, _, err := synclient.New(srv.URL, "", a).Push(); err != nil {
+		t.Fatal(err)
+	}
+	if created, _, _, err := synclient.New(srv.URL, "", b).Pull(); err != nil || created != 3 {
+		t.Fatalf("pull created %d: %v", created, err)
+	}
+	if _, updated, _, _, _, err := synclient.New(srv.URL, "", b).Push(); err != nil || updated != 0 {
+		t.Errorf("push after pull updated %d: %v", updated, err)
+	}
+	for name, content := range files {
+		for _, dir := range []string{serverDir, b} {
+			if got, _ := os.ReadFile(filepath.Join(dir, name)); string(got) != content {
+				t.Errorf("%s in %s is %q, want %q", name, dir, got, content)
+			}
+		}
+	}
+}

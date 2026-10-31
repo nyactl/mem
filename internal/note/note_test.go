@@ -190,3 +190,20 @@ func TestTitleKeptBySetDateAndUpdateAttachments(t *testing.T) {
 		t.Errorf("title %q date %v attachments %v", n.Title, n.Date, n.Attachments)
 	}
 }
+
+func TestSplitFrontmatter(t *testing.T) {
+	for _, c := range []struct{ in, fm, body string }{
+		{"---\ntags: []\n---\nbody\n", "---\ntags: []\n---\n", "body\n"},
+		{"---\ntags: []\n---\nbody", "---\ntags: []\n---\n", "body"},
+		{"---\ntags: []\n---\n", "---\ntags: []\n---\n", ""},
+		{"---\ntags: []\n---", "---\ntags: []\n---", ""},
+		{"---\n---\nbody\n", "---\n---\n", "body\n"},
+		{"---\ntags: []\nunclosed\n", "", "---\ntags: []\nunclosed\n"},
+		{"no frontmatter\n", "", "no frontmatter\n"},
+		{"---\na: b\n---\ntext\n---\nmore\n", "---\na: b\n---\n", "text\n---\nmore\n"},
+	} {
+		if fm, body := SplitFrontmatter(c.in); fm != c.fm || body != c.body {
+			t.Errorf("SplitFrontmatter(%q) = %q, %q; want %q, %q", c.in, fm, body, c.fm, c.body)
+		}
+	}
+}

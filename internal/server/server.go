@@ -510,8 +510,16 @@ func toItem(n note.Note, etag string) noteItem {
 	return item
 }
 
+// toDetail sends the body as stored, final newline included: a client writes it back as it gets
+// it, and anything less makes its copy differ from the server's and pushes it back.
 func toDetail(n note.Note, etag string) noteDetail {
-	return noteDetail{noteItem: toItem(n, etag), Body: n.Body}
+	body := n.Body
+	if raw, err := os.ReadFile(n.Path); err == nil {
+		if fm, b := note.SplitFrontmatter(string(raw)); fm != "" {
+			body = b
+		}
+	}
+	return noteDetail{noteItem: toItem(n, etag), Body: body}
 }
 
 // setETag writes an ETag header preserving RFC 7232 casing ("ETag", not "Etag").
